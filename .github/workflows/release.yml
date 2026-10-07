@@ -1,67 +1,46 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
+  release:
+    types: [published]
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   release:
-    if: github.event.head_commit.message != 'Initial commit'
+    name: Build do zip e anexo ao release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Buscar versão do manifest.json
-        id: version
+      - name: Sincronizar versão do manifest com a tag
+        shell: bash
         run: |
-          echo "version=v$(jq -r '.version' custom_components/inmet_alertas/manifest.json)" >> $GITHUB_OUTPUT
+          VERSION="${GITHUB_REF_NAME#v}"
+          python3 - "$VERSION" <<'EOF'
+          import json
+          import sys
+          from pathlib import Path
 
-      - name: Verificar se tag já existe
-        id: tag_exists
-        run: |
-          if git rev-parse "${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
+          version = sys.argv[1]
+          manifest = Path("custom_components/inmet_alertas/manifest.json")
+          data = json.loads(manifest.read_text(encoding="utf-8"))
+          data["version"] = version
+          manifest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+          print(f"manifest.json -> version {version}")
+          EOF
 
-      - name: Extrair changelog da versão
-        id: changelog
-        if: steps.tag_exists.outputs.exists == 'false'
-        run: |
-          version="${{ steps.version.outputs.version }}"
-          output=$(awk -v ver="$version" '
-            $0 ~ "^## " ver {
-              found = 1
-              next
-            }
-            found && /^## v/ { exit }
-            found { print }
-          ' CHANGELOG.md)
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          echo "$output" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Criar pacote .zip
-        if: steps.tag_exists.outputs.exists == 'false'
+      - name: Empacotar a integração (zip flat, sem caches)
+        shell: bash
         run: |
           cd custom_components/inmet_alertas
-          zip -r ../../inmet_alertas.zip . -x "tests/*" -x "*.pyc" -x "__pycache__/*" -x ".gitignore"
-          cd ../..
+          find . -name "__pycache__" -type d -exec rm -rf {} +
+          zip inmet_alertas.zip -r ./ -x "*.pyc" "*/__pycache__/*"
 
-      - name: Criar Release no GitHub
-        if: steps.tag_exists.outputs.exists == 'false'
+      - name: Anexar o zip ao release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: ${{ steps.version.outputs.version }}
-          body: ${{ steps.changelog.outputs.notes }}
-          files: inmet_alertas.zip
-          generate_release_notes: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: custom_components/inmet_alertas/inmet_alertas.zip

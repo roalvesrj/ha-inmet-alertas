@@ -135,6 +135,7 @@ custom_components/inmet_alertas/
 ### 5.8 Manifest/HACS
 - `manifest.json`: remove `requirements`; adiciona `integration_type: "service"`; `dependencies: ["http"]`; mantém `after_dependencies` (`persistent_notification`).
 - `hacs.json`: `"homeassistant": "2026.3.0"` + `"hacs": "2.0.0"` (mínimo real para o padrão OptionsFlow/APIs usados e para brands locais `brand/`; era 2024.1/1.32).
+- Release automatizado: GitHub Release (`published`) → workflow `.github/workflows/release.yml` sincroniza a versão do manifest com a tag e anexa `inmet_alertas.zip` (zip flat, exigido pelo `zip_release` + `filename`).
 
 ---
 
