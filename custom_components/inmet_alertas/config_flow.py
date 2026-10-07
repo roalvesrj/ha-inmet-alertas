@@ -1,83 +1,96 @@
-"""Config flow para INMET Alertas."""
+"""Config flow para INMET Alertas (fluxo v2: data = conexão, options = ajustes)."""
+from __future__ import annotations
+
 import logging
-import voluptuous as vol
-from homeassistant import config_entries
-from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
 from typing import Any
+
+import voluptuous as vol
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
+from homeassistant.core import callback
+
+from .const import (
+    CONF_ESTADO,
+    CONF_NOTIFICACOES_PERIGO,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_NOTIFICACOES_PERIGO,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    ESTADOS_BRASILEIROS,
+    MAX_UPDATE_INTERVAL,
+    MIN_UPDATE_INTERVAL,
+)
+from .coordinator import async_verificar_feed
 
 _LOGGER = logging.getLogger(__name__)
 
-DOMAIN = "inmet_alertas"
 
-ESTADOS_BRASILEIROS = {
-    "AC": "Acre",
-    "AL": "Alagoas", 
-    "AP": "Amapá",
-    "AM": "Amazonas",
-    "BA": "Bahia",
-    "CE": "Ceará",
-    "DF": "Distrito Federal",
-    "ES": "Espírito Santo",
-    "GO": "Goiás",
-    "MA": "Maranhão",
-    "MT": "Mato Grosso",
-    "MS": "Mato Grosso do Sul",
-    "MG": "Minas Gerais",
-    "PA": "Pará",
-    "PB": "Paraíba",
-    "PR": "Paraná",
-    "PE": "Pernambuco",
-    "PI": "Piauí",
-    "RJ": "Rio de Janeiro",
-    "RN": "Rio Grande do Norte",
-    "RS": "Rio Grande do Sul",
-    "RO": "Rondônia",
-    "RR": "Roraima",
-    "SC": "Santa Catarina",
-    "SP": "São Paulo",
-    "SE": "Sergipe",
-    "TO": "Tocantins"
-}
+class InmetAlertasConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Config flow do INMET Alertas."""
 
-class InmetAlertasConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for INMET Alertas."""
+    VERSION = 2
 
-    VERSION = 1
-
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle the initial step."""
-        errors = {}
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Primeiro (e único) passo do fluxo."""
+        errors: dict[str, str] = {}
 
         if user_input is not None:
-            estado = user_input.get("estado", "").upper()
-            
-            # Verificar se já existe uma entrada configurada
-            await self.async_set_unique_id(f"{DOMAIN}_{estado}")
-            self._abort_if_unique_id_configured()
-            
+            estado = user_input[CONF_ESTADO].upper()
+
             if estado not in ESTADOS_BRASILEIROS:
-                errors["estado"] = "invalid_state"
+                errors[CONF_ESTADO] = "invalid_state"
             else:
-                return self.async_create_entry(
-                    title=f"INMET Alertas - {ESTADOS_BRASILEIROS[estado]}",
-                    data={
-                        "estado": estado,
-                        "notificacoes_perigo": user_input.get("notificacoes_perigo", True),
-                        "update_interval": user_input.get("update_interval", 30)
-                    }
-                )
+                await self.async_set_unique_id(f"{DOMAIN}_{estado}")
+                self._abort_if_unique_id_configured()
 
-        # Criar lista de opções para o dropdown
-        estado_options = {k: f"{k} - {v}" for k, v in ESTADOS_BRASILEIROS.items()}
+                try:
+                    conectado = await async_verificar_feed(self.hass)
+                except Exception:  # noqa: BLE001 — inesperado vira "unknown"
+                    _LOGGER.exception(
+                        "Erro inesperado ao verificar o feed do INMET"
+                    )
+                    errors["base"] = "unknown"
+                else:
+                    if conectado:
+                        return self.async_create_entry(
+                            title=f"INMET Alertas - {ESTADOS_BRASILEIROS[estado]}",
+                            data={CONF_ESTADO: estado},
+                            options={
+                                CONF_NOTIFICACOES_PERIGO: user_input.get(
+                                    CONF_NOTIFICACOES_PERIGO,
+                                    DEFAULT_NOTIFICACOES_PERIGO,
+                                ),
+                                CONF_UPDATE_INTERVAL: user_input.get(
+                                    CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+                                ),
+                            },
+                        )
+                    errors["base"] = "cannot_connect"
 
-        data_schema = vol.Schema({
-            vol.Required("estado", default="SP"): vol.In(estado_options),
-            vol.Optional("notificacoes_perigo", default=True): bool,
-            vol.Optional("update_interval", default=30): vol.All(
-                vol.Coerce(int), vol.Range(min=5, max=120)
-            ),
-        })
+        estado_options = {
+            sigla: f"{sigla} - {nome}"
+            for sigla, nome in ESTADOS_BRASILEIROS.items()
+        }
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_ESTADO, default="SP"): vol.In(estado_options),
+                vol.Optional(
+                    CONF_NOTIFICACOES_PERIGO, default=DEFAULT_NOTIFICACOES_PERIGO
+                ): bool,
+                vol.Optional(
+                    CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
+                ): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=MIN_UPDATE_INTERVAL, max=MAX_UPDATE_INTERVAL),
+                ),
+            }
+        )
 
         return self.async_show_form(
             step_id="user",
@@ -87,29 +100,41 @@ class InmetAlertasConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
-        """Get the options flow for this handler."""
+    def async_get_options_flow(config_entry: ConfigEntry) -> InmetAlertasOptionsFlow:
+        """Cria o fluxo de opções."""
         return InmetAlertasOptionsFlow()
 
 
-class InmetAlertasOptionsFlow(config_entries.OptionsFlow):
-    """Handle INMET Alertas options."""
+class InmetAlertasOptionsFlow(OptionsFlow):
+    """Opções: notificações de perigo e intervalo de atualização."""
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Manage the options."""
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Gerenciar as opções."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
+        options = self.config_entry.options
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({
-                vol.Optional(
-                    "notificacoes_perigo",
-                    default=self.config_entry.options.get("notificacoes_perigo", True)
-                ): bool,
-                vol.Optional(
-                    "update_interval",
-                    default=self.config_entry.options.get("update_interval", 30)
-                ): vol.All(vol.Coerce(int), vol.Range(min=5, max=120)),
-            })
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_NOTIFICACOES_PERIGO,
+                        default=options.get(
+                            CONF_NOTIFICACOES_PERIGO, DEFAULT_NOTIFICACOES_PERIGO
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_UPDATE_INTERVAL,
+                        default=options.get(
+                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+                        ),
+                    ): vol.All(
+                        vol.Coerce(int),
+                        vol.Range(min=MIN_UPDATE_INTERVAL, max=MAX_UPDATE_INTERVAL),
+                    ),
+                }
+            ),
         )

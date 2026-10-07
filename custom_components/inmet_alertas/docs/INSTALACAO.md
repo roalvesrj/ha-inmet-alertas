@@ -2,7 +2,7 @@
 
 ## 🎯 Pré-requisitos
 
-- Home Assistant 2023.1.0 ou superior
+- Home Assistant 2026.3 ou superior
 - HACS (Home Assistant Community Store) instalado
 - Conexão com internet estável
 
@@ -71,7 +71,7 @@
 ### Erro de dependências
 
 1. Verifique sua conexão com internet
-2. As dependências (`aiohttp`, `feedparser`) são instaladas automaticamente
+2. A integração usa apenas bibliotecas já incluídas no Home Assistant — nenhuma dependência externa precisa ser instalada
 3. Reinicie o Home Assistant se necessário
 
 ### Arquivos corrompidos

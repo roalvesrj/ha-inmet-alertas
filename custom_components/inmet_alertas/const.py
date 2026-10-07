@@ -4,9 +4,17 @@ from typing import Final
 # Informações da integração
 DOMAIN: Final = "inmet_alertas"
 NAME: Final = "INMET Alertas"
-VERSION: Final = "1.14.0"
+VERSION: Final = "1.15.0"
 MANUFACTURER: Final = "Instituto Nacional de Meteorologia"
 MODEL: Final = "Sistema de Alertas Meteorológicos"
+
+# Chaves de configuração (ConfigEntry.data/options)
+CONF_ESTADO: Final = "estado"
+CONF_NOTIFICACOES_PERIGO: Final = "notificacoes_perigo"
+CONF_UPDATE_INTERVAL: Final = "update_interval"
+
+# Atribuição exibida nas entidades
+ATTRIBUTION: Final = "Dados fornecidos pelo INMET"
 
 # URLs e endpoints
 URL_RSS: Final = "https://apiprevmet3.inmet.gov.br/avisos/rss"
@@ -14,10 +22,22 @@ URL_BASE_ALERTA: Final = "https://apiprevmet3.inmet.gov.br/avisos/rss/"
 
 # Configurações de rede
 HTTP_TIMEOUT: Final = 30
+HTTP_TIMEOUT_TEST: Final = 15  # segundos — teste de conectividade no config flow
 MAX_RETRIES: Final = 3
+
+# Headers centralizados para todas as requisições ao INMET.
+# O User-Agent de navegador é intencional: o INMET responde 403 para UAs
+# não-navegador (comportamento observado em produção — não alterar sem
+# validar contra a API).
 REQUEST_HEADERS: Final = {
-    "User-Agent": "Home Assistant INMET Integration/1.9.2",
-    "Accept": "application/rss+xml, application/xml, text/xml",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
 }
 
 # Configurações de atualização
@@ -28,7 +48,7 @@ MAX_UPDATE_INTERVAL: Final = 120     # minutos
 # Mapeamento de severidades CAP para INMET
 SEVERIDADE_CAP_MAP: Final = {
     "Minor": "Perigo Potencial",
-    "Moderate": "Perigo", 
+    "Moderate": "Perigo",
     "Severe": "Perigo",
     "Extreme": "Grande Perigo"
 }
@@ -50,7 +70,7 @@ CORES_INMET_MAPA: Final = {
 # Mapeamento CAP ColorRisk para severidade
 COLORISK_TO_SEVERIDADE: Final = {
     "#FFFF00": "Perigo Potencial",
-    "#FF8C00": "Perigo", 
+    "#FF8C00": "Perigo",
     "#F80703": "Grande Perigo",
     "#FFA500": "Perigo",  # Laranja alternativo
     "#FFD700": "Perigo Potencial",  # Amarelo alternativo
@@ -98,7 +118,7 @@ CENTROS_ESTADOS: Final = {
 # Ícones por tipo de evento
 EVENTO_ICONES: Final = {
     "Chuva": "🌧️",
-    "Vendaval": "💨", 
+    "Vendaval": "💨",
     "Tempestade": "⛈️",
     "Granizo": "🧊",
     "Neve": "❄️",
@@ -110,15 +130,15 @@ EVENTO_ICONES: Final = {
 
 # Prioridades de severidade
 SEVERIDADE_PRIORIDADES: Final = {
-    "Grande Perigo": 3, 
-    "Perigo": 2, 
+    "Grande Perigo": 3,
+    "Perigo": 2,
     "Perigo Potencial": 1,
 }
 
 # Estados brasileiros
 ESTADOS_BRASILEIROS: Final = {
     "AC": "Acre",
-    "AL": "Alagoas", 
+    "AL": "Alagoas",
     "AP": "Amapá",
     "AM": "Amazonas",
     "BA": "Bahia",
@@ -176,63 +196,63 @@ ATTR_ZOOM_RECOMENDADO: Final = "zoom_recomendado"
 MICRORREGIOES_ESTADOS: Final = {
     # Acre
     "Vale do Acre": "AC",
-    
-    # Alagoas  
+
+    # Alagoas
     "Agreste Alagoano": "AL",
     "Sertão Alagoano": "AL",
-    
+
     # Amazonas
-    "Centro Amazonense": "AM", 
+    "Centro Amazonense": "AM",
     "Norte Amazonense": "AM",
     "Sudoeste Amazonense": "AM",
     "Sul Amazonense": "AM",
-    
+
     # Amapá
     "Norte do Amapá": "AP",
-    "Sul do Amapá": "AP", 
-    
+    "Sul do Amapá": "AP",
+
     # Bahia
     "Centro Norte Baiano": "BA",
     "Centro Sul Baiano": "BA",
-    "Extremo Oeste Baiano": "BA", 
+    "Extremo Oeste Baiano": "BA",
     "Nordeste Baiano": "BA",
     "Sul Baiano": "BA",
     "Vale São-Franciscano da Bahia": "BA",
-    
+
     # Ceará
     "Centro-Sul Cearense": "CE",
     "Noroeste Cearense": "CE",
-    "Norte Cearense": "CE", 
+    "Norte Cearense": "CE",
     "Sertões Cearenses": "CE",
     "Sul Cearense": "CE",
-    
+
     # Distrito Federal
     "Distrito Federal": "DF",
-    
+
     # Espírito Santo
     "Central Espírito-santense": "ES",
     "Litoral Norte Espírito-santense": "ES",
     "Noroeste Espírito-santense": "ES",
     "Sul Espírito-santense": "ES",
-    
+
     # Goiás
     "Centro Goiano": "GO",
     "Leste Goiano": "GO",
     "Noroeste Goiano": "GO",
-    "Norte Goiano": "GO", 
+    "Norte Goiano": "GO",
     "Sul Goiano": "GO",
-    
+
     # Maranhão
     "Centro Maranhense": "MA",
     "Leste Maranhense": "MA",
     "Norte Maranhense": "MA",
     "Oeste Maranhense": "MA",
     "Sul Maranhense": "MA",
-    
+
     # Minas Gerais
     "Central Mineira": "MG",
     "Campo das Vertentes": "MG",
-    "Jequitinhonha": "MG", 
+    "Jequitinhonha": "MG",
     "Metropolitana de Belo Horizonte": "MG",
     "Noroeste de Minas": "MG",
     "Norte de Minas": "MG",
@@ -242,20 +262,20 @@ MICRORREGIOES_ESTADOS: Final = {
     "Vale do Mucuri": "MG",
     "Vale do Rio Doce": "MG",
     "Zona da Mata": "MG",
-    
+
     # Mato Grosso do Sul
-    "Centro Norte de Mato Grosso do Sul": "MS", 
+    "Centro Norte de Mato Grosso do Sul": "MS",
     "Leste de Mato Grosso do Sul": "MS",
     "Pantanais Sul Mato-grossense": "MS",
     "Sudoeste de Mato Grosso do Sul": "MS",
-    
+
     # Mato Grosso
     "Centro-Sul Mato-grossense": "MT",
     "Nordeste Mato-grossense": "MT",
     "Norte Mato-grossense": "MT",
-    "Sudeste Mato-grossense": "MT", 
+    "Sudeste Mato-grossense": "MT",
     "Sudoeste Mato-grossense": "MT",
-    
+
     # Pará
     "Baixo Amazonas": "PA",
     "Marajó": "PA",
@@ -263,26 +283,26 @@ MICRORREGIOES_ESTADOS: Final = {
     "Nordeste Paraense": "PA",
     "Sudeste Paraense": "PA",
     "Sudoeste Paraense": "PA",
-    
+
     # Paraíba
     "Agreste Paraibano": "PB",
-    "Borborema": "PB", 
+    "Borborema": "PB",
     "Sertão Paraibano": "PB",
-    
+
     # Pernambuco
     "Agreste Pernambucano": "PE",
     "São Francisco Pernambucano": "PE",
     "Sertão Pernambucano": "PE",
-    
+
     # Piauí
     "Centro-Norte Piauiense": "PI",
     "Norte Piauiense": "PI",
     "Sudeste Piauiense": "PI",
     "Sudoeste Piauiense": "PI",
-    
+
     # Paraná
     "Centro Ocidental Paranaense": "PR",
-    "Centro Oriental Paranaense": "PR", 
+    "Centro Oriental Paranaense": "PR",
     "Centro-Sul Paranaense": "PR",
     "Metropolitana de Curitiba": "PR",
     "Noroeste Paranaense": "PR",
@@ -291,37 +311,37 @@ MICRORREGIOES_ESTADOS: Final = {
     "Oeste Paranaense": "PR",
     "Sudeste Paranaense": "PR",
     "Sudoeste Paranaense": "PR",
-    
+
     # Rio de Janeiro
     "Baixadas": "RJ",
-    "Centro Fluminense": "RJ", 
+    "Centro Fluminense": "RJ",
     "Metropolitana do Rio de Janeiro": "RJ",
     "Noroeste Fluminense": "RJ",
     "Norte Fluminense": "RJ",
     "Sul Fluminense": "RJ",
-    
+
     # Rio Grande do Norte
     "Agreste Potiguar": "RN",
     "Central Potiguar": "RN",
     "Oeste Potiguar": "RN",
-    
+
     # Rondônia
     "Leste Rondoniense": "RO",
     "Madeira-Guaporé": "RO",
-    
+
     # Roraima
     "Norte de Roraima": "RR",
     "Sul de Roraima": "RR",
-    
+
     # Rio Grande do Sul
     "Centro Ocidental Rio-grandense": "RS",
     "Centro Oriental Rio-grandense": "RS",
     "Metropolitana de Porto Alegre": "RS",
     "Nordeste Rio-grandense": "RS",
-    "Noroeste Rio-grandense": "RS", 
+    "Noroeste Rio-grandense": "RS",
     "Sudeste Rio-grandense": "RS",
     "Sudoeste Rio-grandense": "RS",
-    
+
     # Santa Catarina
     "Grande Florianópolis": "SC",
     "Norte Catarinense": "SC",
@@ -329,20 +349,20 @@ MICRORREGIOES_ESTADOS: Final = {
     "Serrana": "SC",
     "Sul Catarinense": "SC",
     "Vale do Itajaí": "SC",
-    
+
     # Sergipe
     "Agreste Sergipano": "SE",
     "Sertão Sergipano": "SE",
-    
+
     # São Paulo
     "Araraquara": "SP",
     "Araçatuba": "SP",
-    "Assis": "SP", 
+    "Assis": "SP",
     "Bauru": "SP",
     "Campinas": "SP",
     "Itapetininga": "SP",
     "Litoral Sul Paulista": "SP",
-    "Macro Metropolitana Paulista": "SP", 
+    "Macro Metropolitana Paulista": "SP",
     "Marília": "SP",
     "Metropolitana de São Paulo": "SP",
     "Piracicaba": "SP",
@@ -350,12 +370,12 @@ MICRORREGIOES_ESTADOS: Final = {
     "Ribeirão Preto": "SP",
     "São José do Rio Preto": "SP",
     "Vale do Paraíba Paulista": "SP",
-    
+
     # Tocantins
     "Jaguaribe": "TO",
     "Ocidental do Tocantins": "TO",
     "Oriental do Tocantins": "TO",
-    
+
     # Juruá (região que pode abranger múltiplos estados)
     "Vale do Juruá": "AC",  # Predominantemente Acre
 }

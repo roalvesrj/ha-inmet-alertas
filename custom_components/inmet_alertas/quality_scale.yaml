@@ -1,0 +1,30 @@
+# Status do Integration Quality Scale — tier Bronze.
+# Referência: SPEC.md (seção 3) e docs oficiais:
+# https://developers.home-assistant.io/docs/core/integration-quality-scale/
+rules:
+  action_setup: done
+  appropriate_polling: done
+  brands: done
+  common_modules: done
+  config_flow: done
+  config_flow_test_coverage: done
+  dependency_transparency: done
+  docs_actions: done
+  docs_conditions:
+    status: exempt
+    comment: A integração não expõe conditions.
+  docs_high_level_description: done
+  docs_installation_instructions: done
+  docs_removal_instructions: done
+  docs_triggers:
+    status: exempt
+    comment: A integração não expõe triggers (comunica via eventos do bus).
+  entity_event_setup:
+    status: exempt
+    comment: As entidades não assinam eventos; os dados vêm do DataUpdateCoordinator.
+  entity_unique_id: done
+  has_entity_name: done
+  runtime_data: done
+  test_before_configure: done
+  test_before_setup: done
+  unique_config_entry: done

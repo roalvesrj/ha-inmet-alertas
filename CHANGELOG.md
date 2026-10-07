@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.15.0 - 07/10/2026
+
+### 🏆 Qualidade (Integration Quality Scale — Bronze)
+- `runtime_data` tipado: o coordenador vive em `entry.runtime_data` (fim do `hass.data`)
+- Teste de conexão no config flow (`cannot_connect`/`unknown`) e no setup (`async_config_entry_first_refresh` → `ConfigEntryNotReady` + retry do HA)
+- `has_entity_name` padronizado nas 4 entidades; serviço com schema e `ServiceValidationError`
+- Config flow v2: `data` guarda apenas o estado; notificações e intervalo vão para `options` — entradas v1 migram automaticamente
+- Suíte de testes reorganizada: `tests/unit` (lógica pura) e `tests/integration` (harness do HA) com **100% de cobertura do config flow**; CI com hassfest + HACS + pytest
+- `quality_scale.yaml` com as 20 regras do tier Bronze (done/exempt justificados)
+- `brand/` completo: `icon.png`, `logo.png` e `logo@2x.png` (brands locais — suportados a partir do HA 2026.3)
+
+### 🐛 Correções
+- **Sensor de mapa**: campos `evento` e `descricao` dos polígonos voltam a ser preenchidos (antes liam chaves inexistentes)
+- Entidades não reportam mais estado falso ("Nenhum alerta ativo"/0) antes do primeiro ciclo — ficam `unavailable`
+- Diagnóstico: status de rate limiting/erro agora reflete o **último ciclo** (flags `ultimo_ciclo_*`), sem travar em `rate_limit` para sempre
+- Reload da entrada usa o fluxo padrão do HA (`config_entries.async_reload`)
+- Rota estática do plugin usa a API suportada (`async_register_static_paths`) e é registrada uma única vez
+- Notificação persistente não adiciona mais "..." em descrições curtas
+
+### 🧹 Manutenção
+- Removidos módulos mortos (`rss_parser`, `data_processor`, `notification_manager`) e 12 scripts standalone obsoletos
+- `requirements` do manifest esvaziado (aiohttp é core; feedparser não era usado em runtime)
+- Headers HTTP centralizados em `const.py`; chaves de configuração unificadas; import não usados removidos
+- Atributos do sensor principal não duplicam mais a geometria (exposta apenas no sensor de mapa)
+- Compatibilidade mínima ajustada para Home Assistant 2026.3 (e HACS 2.x)
+
 ## v1.14.0 - 19/07/2026
 
 ### ✨ Novos Recursos

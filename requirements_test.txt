@@ -1,0 +1,4 @@
+# Ambiente de teste validado: Home Assistant 2026.9.4 (Python 3.14).
+# O plugin mais recente (0.13.370) pina o HA 2026.10 beta; 0.13.367 é o último estável.
+pytest-homeassistant-custom-component==0.13.367
+pytest-cov==7.1.0

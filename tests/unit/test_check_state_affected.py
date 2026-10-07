@@ -1,6 +1,9 @@
 """Testes para check_state_affected e filter_state_municipalities."""
-from custom_components.inmet_alertas.utils import check_state_affected, filter_state_municipalities
 from custom_components.inmet_alertas.const import MICRORREGIOES_ESTADOS
+from custom_components.inmet_alertas.utils import (
+    check_state_affected,
+    filter_state_municipalities,
+)
 
 
 def test_afeta_por_municipio_rj():

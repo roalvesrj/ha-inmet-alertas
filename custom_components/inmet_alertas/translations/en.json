@@ -3,21 +3,26 @@
     "step": {
       "user": {
         "title": "Configure INMET Weather Alerts",
-        "description": "Configure weather alerts from Brazil's National Institute of Meteorology for your state",
+        "description": "Configure weather alerts from Brazil's National Institute of Meteorology (INMET) for your state.",
         "data": {
           "estado": "State",
           "notificacoes_perigo": "Enable notifications for danger alerts",
           "update_interval": "Update interval (minutes)"
+        },
+        "data_description": {
+          "estado": "Brazilian state to monitor. Add the integration once per state.",
+          "notificacoes_perigo": "Create persistent notifications for alerts with severity Perigo or Grande Perigo.",
+          "update_interval": "How often to check the INMET feed, between 5 and 120 minutes."
         }
       }
     },
     "error": {
-      "invalid_state": "Invalid state. Please select a valid Brazilian state.",
-      "cannot_connect": "Unable to connect to INMET server",
-      "unknown": "Unknown error"
+      "invalid_state": "Invalid state. Select a valid Brazilian state.",
+      "cannot_connect": "Unable to reach the INMET alerts feed. Check your internet connection and try again.",
+      "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "This integration is already configured"
+      "already_configured": "This state is already configured"
     }
   },
   "options": {
@@ -28,94 +33,24 @@
         "data": {
           "notificacoes_perigo": "Enable notifications for danger alerts",
           "update_interval": "Update interval (minutes)"
-        }
-      }
-    }
-  },
-  "entity": {
-    "sensor": {
-      "inmet_alertas": {
-        "name": "INMET Weather Alerts",
-        "state": {
-          "nenhum": "No active alerts",
-          "multiplos": "Multiple active alerts"
         },
-        "state_attributes": {
-          "total_alertas": {
-            "name": "Total Alerts"
-          },
-          "alertas": {
-            "name": "Alerts"
-          },
-          "alertas_por_severidade": {
-            "name": "Alerts by Severity"
-          },
-          "severidade_maxima": {
-            "name": "Maximum Severity"
-          },
-          "municipios_unicos": {
-            "name": "Unique Municipalities"
-          },
-          "municipios_afetados": {
-            "name": "Affected Municipalities"
-          },
-          "estado": {
-            "name": "State"
-          },
-          "ultima_atualizacao": {
-            "name": "Last Update"
-          }
-        }
-      },
-      "inmet_alertas_count": {
-        "name": "INMET Alerts Count",
-        "state_attributes": {
-          "estado": {
-            "name": "State"
-          },
-          "ultima_atualizacao": {
-            "name": "Last Update"
-          }
-        }
-      },
-      "inmet_alertas_mapa": {
-        "name": "INMET Alerts Map",
-        "state_attributes": {
-          "estado": {
-            "name": "State"
-          },
-          "poligonos": {
-            "name": "Polygons"
-          },
-          "area_total_afetada_km2": {
-            "name": "Total Affected Area (km²)"
-          },
-          "centro_geografico": {
-            "name": "Geographic Center"
-          },
-          "bounding_box": {
-            "name": "Bounding Box"
-          },
-          "zoom_recomendado": {
-            "name": "Recommended Zoom"
-          },
-          "camadas_por_severidade": {
-            "name": "Layers by Severity"
-          },
-          "total_alertas_com_geo": {
-            "name": "Total Alerts with Geographic Data"
-          },
-          "ultima_atualizacao": {
-            "name": "Last Update"
-          }
+        "data_description": {
+          "notificacoes_perigo": "Create persistent notifications for alerts with severity Perigo or Grande Perigo.",
+          "update_interval": "How often to check the INMET feed, between 5 and 120 minutes."
         }
       }
     }
   },
   "services": {
     "atualizar_alertas": {
-      "name": "Update Alerts",
-      "description": "Force update of weather alerts"
+      "name": "Update alerts",
+      "description": "Force a refresh of the INMET weather alerts",
+      "fields": {
+        "estado": {
+          "name": "State",
+          "description": "Specific state to refresh (optional - all when omitted)"
+        }
+      }
     }
   }
 }

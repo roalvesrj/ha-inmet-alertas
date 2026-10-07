@@ -3,21 +3,26 @@
     "step": {
       "user": {
         "title": "Configurar INMET Alertas",
-        "description": "Configure os alertas meteorológicos do INMET para o seu estado",
+        "description": "Configure os alertas meteorológicos do INMET para o seu estado.",
         "data": {
           "estado": "Estado",
           "notificacoes_perigo": "Ativar notificações para alertas de perigo",
           "update_interval": "Intervalo de atualização (minutos)"
+        },
+        "data_description": {
+          "estado": "Estado brasileiro a monitorar. Adicione a integração uma vez para cada estado.",
+          "notificacoes_perigo": "Cria notificações persistentes para alertas de severidade Perigo ou Grande Perigo.",
+          "update_interval": "Frequência de verificação do feed do INMET, entre 5 e 120 minutos."
         }
       }
     },
     "error": {
       "invalid_state": "Estado inválido. Selecione um estado brasileiro válido.",
-      "cannot_connect": "Não foi possível conectar ao servidor do INMET",
-      "unknown": "Erro desconhecido"
+      "cannot_connect": "Não foi possível acessar o feed de alertas do INMET. Verifique a conexão e tente novamente.",
+      "unknown": "Erro inesperado"
     },
     "abort": {
-      "already_configured": "Esta integração já está configurada"
+      "already_configured": "Este estado já está configurado"
     }
   },
   "options": {
@@ -28,86 +33,22 @@
         "data": {
           "notificacoes_perigo": "Ativar notificações para alertas de perigo",
           "update_interval": "Intervalo de atualização (minutos)"
+        },
+        "data_description": {
+          "notificacoes_perigo": "Cria notificações persistentes para alertas de severidade Perigo ou Grande Perigo.",
+          "update_interval": "Frequência de verificação do feed do INMET, entre 5 e 120 minutos."
         }
       }
     }
   },
-  "entity": {
-    "sensor": {
-      "inmet_alertas": {
-        "name": "INMET Alertas",
-        "state": {
-          "nenhum": "Nenhum alerta ativo",
-          "multiplos": "Múltiplos alertas ativos"
-        },
-        "state_attributes": {
-          "total_alertas": {
-            "name": "Total de Alertas"
-          },
-          "alertas": {
-            "name": "Alertas"
-          },
-          "alertas_por_severidade": {
-            "name": "Alertas por Severidade"
-          },
-          "severidade_maxima": {
-            "name": "Severidade Máxima"
-          },
-          "municipios_unicos": {
-            "name": "Municípios Únicos"
-          },
-          "municipios_afetados": {
-            "name": "Municípios Afetados"
-          },
-          "estado": {
-            "name": "Estado"
-          },
-          "ultima_atualizacao": {
-            "name": "Última Atualização"
-          }
-        }
-      },
-      "inmet_alertas_count": {
-        "name": "INMET Alertas Contagem",
-        "state_attributes": {
-          "estado": {
-            "name": "Estado"
-          },
-          "ultima_atualizacao": {
-            "name": "Última Atualização"
-          }
-        }
-      },
-      "inmet_alertas_mapa": {
-        "name": "INMET Alertas Mapa",
-        "state_attributes": {
-          "estado": {
-            "name": "Estado"
-          },
-          "poligonos": {
-            "name": "Polígonos"
-          },
-          "area_total_afetada_km2": {
-            "name": "Área Total Afetada (km²)"
-          },
-          "centro_geografico": {
-            "name": "Centro Geográfico"
-          },
-          "bounding_box": {
-            "name": "Caixa Delimitadora"
-          },
-          "zoom_recomendado": {
-            "name": "Zoom Recomendado"
-          },
-          "camadas_por_severidade": {
-            "name": "Camadas por Severidade"
-          },
-          "total_alertas_com_geo": {
-            "name": "Total de Alertas com Dados Geográficos"
-          },
-          "ultima_atualizacao": {
-            "name": "Última Atualização"
-          }
+  "services": {
+    "atualizar_alertas": {
+      "name": "Atualizar alertas",
+      "description": "Força a atualização dos alertas meteorológicos do INMET",
+      "fields": {
+        "estado": {
+          "name": "Estado",
+          "description": "Estado específico para atualizar (opcional — sem ele, atualiza todos)"
         }
       }
     }

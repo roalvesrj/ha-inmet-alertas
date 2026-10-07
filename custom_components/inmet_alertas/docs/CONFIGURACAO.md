@@ -22,7 +22,7 @@
    - ❌ **Desativado**: Não cria notificações automáticas
 
 2. **Intervalo de Atualização**: 
-   - **Padrão**: 30 minutos
+   - **Padrão**: 45 minutos
    - **Mínimo**: 5 minutos
    - **Máximo**: 120 minutos
 
@@ -123,7 +123,7 @@ logger:
 O intervalo de atualização afeta:
 - **Frequência**: Com que frequência busca novos alertas
 - **Performance**: Intervalos menores = mais requisições
-- **Recomendação**: 30 minutos para uso normal
+- **Recomendação**: 45 minutos para uso normal
 
 ## ⚠️ Considerações Importantes
 

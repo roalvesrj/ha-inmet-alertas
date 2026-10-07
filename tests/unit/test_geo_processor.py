@@ -1,5 +1,6 @@
 """Testes para o GeoProcessor."""
 import pytest
+
 from custom_components.inmet_alertas.helpers.geo_processor import GeoProcessor
 
 

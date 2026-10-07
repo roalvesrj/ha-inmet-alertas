@@ -1,6 +1,6 @@
 # INMET Alertas - Integração Home Assistant
 
-<img src="custom_components/inmet_alertas/brand/icon.png" alt="INMET Logo" width="200"/>
+<img src="custom_components/inmet_alertas/brand/logo.png" alt="INMET" width="320"/>
 
 [![GitHub release](https://img.shields.io/github/release/roalvesrj/ha-inmet-alertas.svg)](https://github.com/roalvesrj/ha-inmet-alertas/releases)
 [![GitHub issues](https://img.shields.io/github/issues/roalvesrj/ha-inmet-alertas.svg)](https://github.com/roalvesrj/ha-inmet-alertas/issues)
@@ -33,30 +33,35 @@ A integração foi desenvolvida seguindo as melhores práticas de desenvolviment
 ### 📁 Estrutura Modular
 ```
 inmet_alertas/
-├── 📄 sensor.py, config_flow.py, const.py, etc.
-├── 📁 helpers/           # Módulos auxiliares especializados
-│   ├── 📄 rss_parser.py          # Parser RSS/CAP otimizado
-│   ├── 📄 data_processor.py      # Processamento de dados
-│   ├── 📄 notification_manager.py # Gerenciador de notificações
-│   └── 📄 geo_processor.py       # Processamento geográfico de polígonos
-├── 📁 docs/             # Documentação detalhada
-├── 📁 translations/     # Suporte multilíngue (PT/EN)
-└── 📁 www/              # Plugin Leaflet para ha-map-card
-tests/                   # Testes unitários pytest
-pyproject.toml           # Configuração do pytest
+├── 📄 __init__.py        # Setup/unload, serviço de atualização e migração
+├── 📄 coordinator.py     # Busca RSS/CAP, rate limiting e persistência de alertas
+├── 📄 entity.py          # Classe base das entidades (nome + atribuição)
+├── 📄 sensor.py          # Os 4 sensores (principal, contagem, mapa, diagnóstico)
+├── 📄 config_flow.py     # Config flow v2 (data = estado; options = ajustes)
+├── 📄 const.py           # Constantes centralizadas
+├── 📁 helpers/           # Lógica pura e testável
+│   ├── 📄 geo_processor.py   # Polígonos, áreas e zoom
+│   ├── 📄 sensor_data.py     # Atributos e resumos dos sensores
+│   └── 📄 persistence.py     # Merge/expiração de alertas persistentes
+├── 📁 docs/              # Documentação detalhada
+├── 📁 translations/      # Suporte multilíngue (PT/EN)
+├── 📁 brand/             # Ícone da integração
+└── 📁 www/               # Plugin Leaflet para ha-map-card
+tests/                    # Testes: unit (lógica pura) e integration (harness do HA)
 ```
 
 ### 🔧 Componentes Especializados
-- **RSSParser**: Comunicação otimizada com feeds do INMET
-- **DataProcessor**: Validação e formatação de dados meteorológicos
-- **NotificationManager**: Gerenciamento inteligente de notificações
-- **Constantes Centralizadas**: Configurações organizadas em const.py
+- **INMETDataUpdateCoordinator**: busca o RSS/CAP, trata rate limiting com fila de retry e dispara eventos/notificações
+- **Entidades finas**: `entity.py` define a base; `sensor.py` apenas monta o estado
+- **Helpers puros**: `geo_processor`, `sensor_data` e `persistence` concentram a lógica testável sem o HA
+- **Constantes Centralizadas**: configurações organizadas em `const.py`
 
 ### 📋 Padrões de Qualidade
 - **Código documentado** com docstrings em português
 - **Tratamento robusto de erros** em todas as operações
 - **Logs estruturados** para facilitar troubleshooting
-- **Testes automatizados** para validação contínua
+- **Testes automatizados**: `tests/unit` (lógica pura) e `tests/integration` (harness do HA, com 100% de cobertura do config flow)
+- **Integration Quality Scale**: tier Bronze declarado em `quality_scale.yaml`
 
 ## 📦 Instalação
 
@@ -78,6 +83,15 @@ Para instruções detalhadas, consulte:
 - ⚙️ **[Guia de Configuração](custom_components/inmet_alertas/docs/CONFIGURACAO.md)** - Configuração completa
 - 🎨 **[Exemplos de Automações](custom_components/inmet_alertas/examples/automations.md)** - Exemplos de automações
 - 🔧 **[Solução de Problemas](custom_components/inmet_alertas/docs/CONFIGURACAO.md#🆘-resolução-de-problemas)** - Resolução de issues
+
+### 🗑️ Remover a integração
+
+1. **Remover cada estado**: **Configurações** → **Dispositivos e Serviços** → **INMET Alertas** → menu **⋮** → **Excluir** (repita para cada estado configurado)
+2. **Se instalado via HACS**: **HACS** → **Integrações** → **INMET Alertas** → menu **⋮** → **Remover**
+3. **Se instalado manualmente**: apague a pasta `custom_components/inmet_alertas` do diretório de configuração
+4. **Reinicie o Home Assistant**
+
+As notificações persistentes criadas pela integração podem ser dispensadas na sineta de notificações do HA.
 
 ## ⚙️ Configuração
 
@@ -134,14 +148,16 @@ Você pode configurar a integração para monitorar diferentes estados simultane
   - `poligonos`: Lista detalhada de todos os polígonos
 
 ### `sensor.inmet_alertas_diagnostico_[ESTADO]`
-- **Estado**: Status geral da integração (`ok`, `rate_limit`, `erro`, `inativo`)
+- **Estado**: Status do último ciclo (`ok`, `rate_limit`, `erro`, `desconhecido`)
 - **Atributos**:
   - `ultimo_http_status`: Código HTTP da última requisição ao INMET
   - `rate_limit_hits`: Quantas vezes o rate limiting foi acionado
   - `pending_caps`: CAPs aguardando retry na fila
   - `ultimo_erro`: Mensagem do último erro (se houver)
   - `total_alertas_api`: Total de alertas retornados pela API no último ciclo
-  - `ciclo_atual`: Número do ciclo de atualização
+  - `ciclo_atual`: Timestamp ISO do início do último ciclo de atualização
+  - `ultimo_ciclo_com_erro`: Se o último ciclo terminou com erro
+  - `ultimo_ciclo_rate_limited`: Se o último ciclo sofreu rate limiting
 
 ## 🔔 Notificações
 
@@ -590,10 +606,10 @@ Este projeto segue o [Versionamento Semântico](https://semver.org/):
 
 ## 📊 Estatísticas do Projeto
 
-- **+3000 linhas** de código Python
+- **~2.100 linhas** de código Python (produto) + **~600 linhas** de testes automatizados
 - **+30 arquivos** organizados em estrutura modular
 - **100% em português** (documentação e interface)
-- **Compatibilidade** com Home Assistant 2023.1+
+- **Compatibilidade** com Home Assistant 2026.3+
 - **Plugin de mapa** para visualização de polígonos geográficos
 - **Suporte ativo** da comunidade brasileira
 
