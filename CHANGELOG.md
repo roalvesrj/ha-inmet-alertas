@@ -16,6 +16,9 @@
 
 ### 🐛 Correções
 - Feed vazio ou com namespace não quebra mais o parsing do RSS (o caminho XPath `local-name()` não é suportado pelo ElementTree) — regressão coberta por teste
+- Evento `inmet_alerta_expirado` agora é disparado de verdade na expiração de um alerta (estava documentado, mas nunca existiu) — coberto por teste
+- Serviço `atualizar_alertas` levanta `HomeAssistantError` quando a atualização falha (regra `action-exceptions`)
+- Plugin do mapa: HTML de popups/controle escapado (`escaparHtml`) — dados do feed não são mais interpolados crus; timers (retry/interval/unlock) cancelados no `destroy`; estilo injetado uma única vez por página
 
 ## v1.15.0 - 07/10/2026
 
@@ -42,6 +45,7 @@
 - Headers HTTP centralizados em `const.py`; chaves de configuração unificadas; import não usados removidos
 - Atributos do sensor principal não duplicam mais a geometria (exposta apenas no sensor de mapa)
 - Compatibilidade mínima ajustada para Home Assistant 2026.3 (e HACS 2.x)
+- Documentação: parâmetros de configuração no README e parâmetros de instalação no `docs/INSTALACAO.md`
 
 ## v1.14.0 - 19/07/2026
 

@@ -7,7 +7,12 @@ import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.inmet_alertas.const import CONF_ESTADO, DOMAIN, URL_RSS
+from custom_components.inmet_alertas.const import (
+    CONF_ESTADO,
+    DOMAIN,
+    EVENT_ALERTA_EXPIRADO,
+    URL_RSS,
+)
 from custom_components.inmet_alertas.coordinator import INMETDataUpdateCoordinator
 
 RSS_VAZIO = """<?xml version="1.0" encoding="UTF-8"?>
@@ -79,3 +84,34 @@ async def test_update_aceita_feed_em_namespace(hass, aioclient_mock):
     dados = await coordenador._async_update_data()
 
     assert dados["count"] == 0
+
+
+async def test_evento_alerta_expirado_e_disparado(hass, aioclient_mock):
+    """Alerta que expira dispara inmet_alerta_expirado com os dados."""
+    eventos = []
+    hass.bus.async_listen(EVENT_ALERTA_EXPIRADO, eventos.append)
+
+    coordenador = _criar_coordenador(hass)
+    coordenador._alertas_persistentes = {
+        "A1": {
+            "id": "A1",
+            "titulo": "Chuvas Intensas",
+            "evento": "Chuva",
+            "severidade": "Perigo",
+            "expires": "2026-10-01T18:00:00-03:00",  # no passado
+            "inicio": "01/10/2026 10:00",
+            "fim": "01/10/2026 18:00",
+            "municipios_estado": ["Rio de Janeiro - RJ (3304557)"],
+            "area_desc": "Rio de Janeiro",
+        }
+    }
+
+    aioclient_mock.get(URL_RSS, text=RSS_VAZIO)
+    dados = await coordenador._async_update_data()
+    await hass.async_block_till_done()
+
+    assert dados["count"] == 0
+    assert len(eventos) == 1
+    assert eventos[0].data["alert_id"] == "A1"
+    assert eventos[0].data["severidade"] == "Perigo"
+    assert eventos[0].data["municipios"] == 1

@@ -8,7 +8,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
@@ -53,7 +53,12 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             )
 
         for coordenador in coordenadores:
-            await coordenador.async_request_refresh()
+            try:
+                await coordenador.async_request_refresh()
+            except Exception as err:  # noqa: BLE001 — falha de execução vira HA error
+                raise HomeAssistantError(
+                    f"Falha ao atualizar os alertas do INMET: {err}"
+                ) from err
 
     hass.services.async_register(
         DOMAIN,

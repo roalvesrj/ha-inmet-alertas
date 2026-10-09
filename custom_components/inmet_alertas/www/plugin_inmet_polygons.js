@@ -73,6 +73,20 @@ export function normalizarSeveridades(valor) {
   );
 }
 
+/**
+ * Escapa texto para interpolação segura em HTML (dados de feed externo).
+ */
+export function escaparHtml(valor) {
+  return String(valor ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+let estilosInjetados = false;
+
 export default function (L, pluginBase, Logger) {
   return class INMETPolygonsPlugin extends pluginBase {
     constructor(map, name, options = {}) {
@@ -136,8 +150,10 @@ export default function (L, pluginBase, Logger) {
       // Controle de camadas (criado sob demanda, quando há mapa/pronto)
       this._layerControl = null;
       this._controleEl = null;
-      this._radioGroupName = `inmet-basemap-${String(name || 'plugin').replace(/\s+/g, '-')}`;
-      this._estilosInjetados = false;
+      this._radioGroupName = `inmet-basemap-${String(name || 'plugin').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+      this._retryTimeoutId = null;
+      this._unlockTimeoutId = null;
+      this._destruido = false;
 
       if (options.basemap) {
         this.setBasemap(options.basemap);
@@ -157,6 +173,9 @@ export default function (L, pluginBase, Logger) {
       const maxAttempts = 30; // ~1 minuto
 
       const checkHass = () => {
+        if (this._destruido) {
+          return;
+        }
         attempts++;
 
         let hass = null;
@@ -179,7 +198,7 @@ export default function (L, pluginBase, Logger) {
             this.intervalId = setInterval(() => this.update(), this.updateInterval);
           }
         } else if (attempts < maxAttempts) {
-          setTimeout(checkHass, 2000);
+          this._retryTimeoutId = setTimeout(checkHass, 2000);
         } else {
           Logger.warn(
             '[INMETPolygonsPlugin] Home Assistant não encontrado após 1 minuto',
@@ -195,7 +214,7 @@ export default function (L, pluginBase, Logger) {
     }
 
     async update() {
-      if (this._isUpdating) {
+      if (this._destruido || this._isUpdating) {
         return;
       }
       this._isUpdating = true;
@@ -214,7 +233,7 @@ export default function (L, pluginBase, Logger) {
       } catch (error) {
         Logger.error('[INMETPolygonsPlugin] Erro no update:', error);
       } finally {
-        setTimeout(() => {
+        this._unlockTimeoutId = setTimeout(() => {
           this._isUpdating = false;
         }, 500);
       }
@@ -344,7 +363,7 @@ export default function (L, pluginBase, Logger) {
           });
 
           leafletPolygon.bindPopup(
-            this.createPopupContent(estadoNome, estadoSigla, severity, polygon, index),
+            this.createPopupContent(estadoNome, estadoSigla, severity, polygon),
           );
 
           if (this.showLabels) {
@@ -369,9 +388,10 @@ export default function (L, pluginBase, Logger) {
       return polygonsAdded;
     }
 
-    createPopupContent(estadoNome, estadoSigla, severity, polygon, index) {
-      const estadoFormatado =
-        estadoNome.charAt(0).toUpperCase() + estadoNome.slice(1).replace(/_/g, ' ');
+    createPopupContent(estadoNome, estadoSigla, severity, polygon) {
+      const estadoFormatado = escaparHtml(
+        estadoNome.charAt(0).toUpperCase() + estadoNome.slice(1).replace(/_/g, ' '),
+      );
 
       const icons = {
         'Grande Perigo': '🔴',
@@ -382,12 +402,12 @@ export default function (L, pluginBase, Logger) {
 
       let content = `
         <div class="inmet-popup" style="min-width: 250px;">
-          <h3 style="margin: 0 0 10px 0; color: ${this.severityColors[severity]};">
+          <h3 style="margin: 0 0 10px 0; color: ${escaparHtml(this.severityColors[severity])};">
             ${icon} ${severity}
           </h3>
           <div style="font-size: 13px; line-height: 1.4;">
-            <p style="margin: 5px 0;"><strong>Estado:</strong> ${estadoFormatado} (${estadoSigla.toUpperCase()})</p>
-            <p style="margin: 5px 0;"><strong>Evento:</strong> ${polygon.evento || 'Alerta Meteorológico'}</p>
+            <p style="margin: 5px 0;"><strong>Estado:</strong> ${estadoFormatado} (${escaparHtml(estadoSigla.toUpperCase())})</p>
+            <p style="margin: 5px 0;"><strong>Evento:</strong> ${escaparHtml(polygon.evento || 'Alerta Meteorológico')}</p>
             <p style="margin: 5px 0;"><strong>Área:</strong> ${polygon.area_km2?.toFixed(1) || 'N/A'} km²</p>
       `;
 
@@ -397,25 +417,24 @@ export default function (L, pluginBase, Logger) {
 
       if (polygon.inicio && polygon.fim) {
         content += `
-          <p style="margin: 5px 0;"><strong>Início:</strong> ${polygon.inicio}</p>
-          <p style="margin: 5px 0;"><strong>Fim:</strong> ${polygon.fim}</p>
+          <p style="margin: 5px 0;"><strong>Início:</strong> ${escaparHtml(polygon.inicio)}</p>
+          <p style="margin: 5px 0;"><strong>Fim:</strong> ${escaparHtml(polygon.fim)}</p>
         `;
       }
 
       if (polygon.descricao) {
+        const descricao = escaparHtml(polygon.descricao);
         const shortDesc =
-          polygon.descricao.length > 120
-            ? polygon.descricao.substring(0, 120) + '...'
-            : polygon.descricao;
+          descricao.length > 120 ? descricao.substring(0, 120) + '...' : descricao;
         content += `<p style="margin: 5px 0;"><strong>Descrição:</strong> ${shortDesc}</p>`;
       }
 
       if (polygon.municipios && Array.isArray(polygon.municipios) && polygon.municipios.length > 0) {
+        const municipios = polygon.municipios.map((municipio) => escaparHtml(municipio));
         const municipiosText =
-          polygon.municipios.length > 3
-            ? polygon.municipios.slice(0, 3).join(', ') +
-              ` e mais ${polygon.municipios.length - 3}`
-            : polygon.municipios.join(', ');
+          municipios.length > 3
+            ? municipios.slice(0, 3).join(', ') + ` e mais ${municipios.length - 3}`
+            : municipios.join(', ');
         content += `<p style="margin: 5px 0;"><strong>Municípios:</strong> ${municipiosText}</p>`;
       }
 
@@ -600,7 +619,7 @@ export default function (L, pluginBase, Logger) {
       ];
       for (const [chave, definicao] of Object.entries(this.basemaps)) {
         linhasBasemap.push(
-          `<label><input type="radio" name="${this._radioGroupName}" value="${chave}"> ${definicao.nome}</label>`,
+          `<label><input type="radio" name="${this._radioGroupName}" value="${escaparHtml(chave)}"> ${escaparHtml(definicao.nome)}</label>`,
         );
       }
 
@@ -671,7 +690,7 @@ export default function (L, pluginBase, Logger) {
     }
 
     _injetarEstilos() {
-      if (this._estilosInjetados || typeof document === 'undefined' || !document.head) {
+      if (estilosInjetados || typeof document === 'undefined' || !document.head) {
         return;
       }
       const style = document.createElement('style');
@@ -692,7 +711,7 @@ export default function (L, pluginBase, Logger) {
         .inmet-cor { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
       `;
       document.head.appendChild(style);
-      this._estilosInjetados = true;
+      estilosInjetados = true;
     }
 
     // --- Limpeza ---
@@ -718,6 +737,17 @@ export default function (L, pluginBase, Logger) {
 
     destroy() {
       try {
+        this._destruido = true;
+
+        if (this._retryTimeoutId) {
+          clearTimeout(this._retryTimeoutId);
+          this._retryTimeoutId = null;
+        }
+        if (this._unlockTimeoutId) {
+          clearTimeout(this._unlockTimeoutId);
+          this._unlockTimeoutId = null;
+        }
+
         if (this.intervalId) {
           clearInterval(this.intervalId);
           this.intervalId = null;

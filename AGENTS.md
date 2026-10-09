@@ -1,18 +1,24 @@
 # AGENTS.md — instruções para agentes de código
 
-Guia de trabalho neste repositório (integração `inmet_alertas` para Home Assistant, meta atual: **tier Bronze** do Integration Quality Scale). Leia também o `SPEC.md` — ele é a fonte de verdade da release em andamento.
+Guia de trabalho neste repositório (integração `inmet_alertas` para Home Assistant, **Bronze completo**, rumo ao **Silver** — `test-coverage` ≥95% pendente; progresso em `quality_scale.yaml`). Leia também o `SPEC.md` — ele é a fonte de verdade da release em andamento.
 
 ## Comandos
 
 ```powershell
-# Testes unitários (lógica pura, roda no Windows)
+# Testes unitários (lógica pura; roda no Windows)
 $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD="1"; python -m pytest tests/unit -q
 
-# Testes de integração (harness do HA; Linux/WSL/CI)
-python -m pytest tests/integration -q
+# Suíte completa (harness do HA; Linux/WSL/CI)
+python -m pytest tests -q
 
-# Gate do Bronze: config flow com 100% de cobertura
-python -m pytest tests/integration --cov=custom_components.inmet_alertas.config_flow --cov-report=term-missing --cov-fail-under=100
+# Gate do Bronze: config flow com 100% de cobertura (sobre a suíte completa)
+python -m pytest tests -q --cov=custom_components.inmet_alertas.config_flow --cov-report=term-missing --cov-fail-under=100
+
+# Cobertura geral do pacote (meta Silver: >= 95%)
+python -m pytest tests -q --cov=custom_components.inmet_alertas --cov-report=term-missing
+
+# Testes do plugin do mapa (Node; roda no Windows e Linux/CI)
+node --test "tests/js/*.test.mjs"
 
 # Checagem sintática rápida
 python -m compileall custom_components -q
@@ -25,6 +31,8 @@ python -m ruff check custom_components tests
 
 > Ambiente de teste validado: **HA 2026.9.4** + plugin `0.13.367` (Python 3.14 — ver `requirements_test.txt`).
 
+> CI (GitHub Actions): `checkout@v4`, `setup-python@v5` e `setup-node@v4` ainda em Node 20 (deprecado; forçado a Node 24). Atualizar as actions quando o warning virar erro.
+
 ## Fluxo TDD (regra do projeto)
 
 1. **Red**: escreva primeiro o teste que descreve o comportamento desejado e confirme que ele falha pelo motivo certo.
@@ -33,11 +41,13 @@ python -m ruff check custom_components tests
 4. **Bug fix**: sempre com teste de regressão que reproduz o bug **antes** da correção.
 5. Nenhuma mudança de comportamento entra sem teste correspondente.
 
-**Exceções pragmáticas** (justificar no PR): `www/plugin_inmet_polygons.js` (sem harness JS; verificação manual), documentação, traduções e wiring puro de APIs do HA.
+**Exceções pragmáticas** (justificar no PR): visual do `www/plugin_inmet_polygons.js` (controle no mapa e popups; a **lógica é coberta** por `tests/js` via `node --test`), documentação, traduções e wiring puro de APIs do HA.
 
 **Onde cada teste mora:**
-- `tests/unit/` — lógica pura sem harness do HA (helpers, utils). Preferir extrair lógica para helpers puros quando isso tornar algo testável.
-- `tests/integration/` — config flow, options flow, setup/unload, entidades, migração.
+- `tests/unit/` — lógica pura (helpers, utils); roda no Windows sem o harness do HA.
+- `tests/integration/` — config flow, options flow, setup/unload, entidades, coordenador, migração.
+- `tests/js/` — plugin do mapa (`node --test`, sem browser).
+- A suíte roda em **processo único** (unit + integration convivem sob o harness no Linux/CI); **nunca** mockar `sys.modules` (o guia oficial de review desaconselha).
 
 ## Conhecimento novo → decisão do usuário (regra vigente)
 
@@ -48,7 +58,12 @@ Qualquer conhecimento relevante identificado durante o trabalho — comportament
 - Aguardar a decisão explícita do usuário antes de editar este arquivo.
 - Conhecimento que já era regra existente pode ser mantido; a regra vale para itens novos.
 
-## Arquitetura (v1.15.0)
+## Commit e push (regra vigente)
+
+- **Nunca** executar `git commit` ou `git push` sem autorização explícita do usuário **para aquela ação específica**.
+- Autorização de uma vez não vale para as próximas: perguntar novamente, sempre.
+
+## Arquitetura (v1.16.0)
 
 ```
 custom_components/inmet_alertas/
@@ -79,11 +94,14 @@ Conhecimento validado contra fontes oficiais e/ou testes; usar direto:
 
 - **Unload**: entidade registrada no entity registry **não sai** do state machine ao descarregar a integração — ela fica `unavailable` (`Entity.async_remove` + docs oficiais). Testes de unload devem assertar `STATE_UNAVAILABLE`, nunca ausência da entidade.
 - **Coordinator**: sempre passar `config_entry=entry` ao `DataUpdateCoordinator` — ele registra `entry.async_on_unload(self.async_shutdown)` sozinho (fonte HA 2025.10+).
-- **Serviços**: dados fora do schema levantam `vol.Invalid` no core; `ServiceValidationError` é para validação semântica dentro do handler (ex.: estado válido, mas não configurado).
+- **Serviços**: dados fora do schema levantam `vol.Invalid` no core; `ServiceValidationError` = entrada inválida; `HomeAssistantError` = falha de execução (rede/bug) — regra `action-exceptions`.
 - **Testes de flow fora do manager**: setar `flow.hass`, `flow.flow_id`, `flow.handler` e `flow.context = {"source": SOURCE_USER}` — `context` é **dict**, não `Context()`.
 - **Arquivos da integração**: localizar com `Path(__file__).parent` (ex.: pasta `www/`); `hass.config.path("custom_components", ...)` aponta para o testing_config nos testes e não encontra nada.
 - **Contrato do plugin de mapa**: o JS consome `camadas_por_severidade[*].poligonos` e `poligonos` do sensor de mapa — não remover/renomear sem atualizar `www/plugin_inmet_polygons.js`.
 - **Ruff**: `# noqa: BLE001` é intencional (o ruleset do HA habilita BLE001); TRY003/TRY301 não são seguidos neste repo.
+- **Qualidade (foco)**: Bronze completo (config-flow 100%); o Silver exige `test-coverage` **>95% em todos os módulos** (sem exceções) — foco atual, **não bloqueante** na 1.16.0.
+- **Frontend (HTML)**: nunca interpolar dados externos (feed) direto em HTML — usar `escaparHtml` (popups/controle do plugin do mapa).
+- **Frontend (timers)**: rastrear e cancelar timers (retry/interval/unlock) no `destroy`, com flag `_destruido`.
 
 ## Não faça
 

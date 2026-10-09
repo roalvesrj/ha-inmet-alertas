@@ -7,7 +7,7 @@ import pytest
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.inmet_alertas import async_migrate_entry
@@ -130,3 +130,63 @@ async def test_servico_atualizar_alertas_valida_estado(hass):
         await hass.services.async_call(
             DOMAIN, SERVICE_ATUALIZAR_ALERTAS, {CONF_ESTADO: "XX"}, blocking=True
         )
+
+
+async def test_entidades_ficam_indisponiveis_quando_ciclo_falha(hass):
+    """entity-unavailable: falha no coordenador deixa as entidades unavailable."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        unique_id=f"{DOMAIN}_GO",
+        data={CONF_ESTADO: "GO"},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.inmet_alertas.coordinator."
+        "INMETDataUpdateCoordinator.async_config_entry_first_refresh",
+        new_callable=AsyncMock,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    entity_id = "sensor.quantidade_de_alertas_go"
+
+    coordenador = entry.runtime_data
+    coordenador.last_update_success = False
+    coordenador.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
+
+
+async def test_servico_erro_interno_levanta_home_assistant_error(hass):
+    """action-exceptions: falha de execução do serviço → HomeAssistantError."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        unique_id=f"{DOMAIN}_GO",
+        data={CONF_ESTADO: "GO"},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.inmet_alertas.coordinator."
+        "INMETDataUpdateCoordinator.async_config_entry_first_refresh",
+        new_callable=AsyncMock,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    with patch.object(
+        type(entry.runtime_data),
+        "async_request_refresh",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("boom"),
+    ):
+        with pytest.raises(HomeAssistantError):
+            await hass.services.async_call(
+                DOMAIN, SERVICE_ATUALIZAR_ALERTAS, {}, blocking=True
+            )

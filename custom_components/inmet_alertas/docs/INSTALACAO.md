@@ -53,6 +53,16 @@
 1. **Reinicie o Home Assistant** completamente
 2. Verifique os logs para confirmar que não há erros de carregamento
 
+## 📋 Parâmetros solicitados na instalação
+
+| Campo | Descrição | Observação |
+|---|---|---|
+| **Estado** | Estado brasileiro a monitorar (ex.: `SP - São Paulo`) | Um por integração; repita a instalação para monitorar outros estados |
+| Notificações de perigo | Cria notificações persistentes para alertas Perigo/Grande Perigo | Padrão: ativado |
+| Intervalo de atualização | Frequência de verificação do feed, em minutos (5–120) | Padrão: 45 |
+
+> Os mesmos campos ficam disponíveis depois em **Configurar** (options flow) — exceto o Estado, que é fixo por integração.
+
 ## ✅ Verificação da Instalação
 
 1. Vá para **Configurações** → **Dispositivos e Serviços**

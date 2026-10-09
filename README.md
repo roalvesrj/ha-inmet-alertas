@@ -6,6 +6,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/roalvesrj/ha-inmet-alertas.svg)](https://github.com/roalvesrj/ha-inmet-alertas/issues)
 [![License](https://img.shields.io/github/license/roalvesrj/ha-inmet-alertas.svg)](LICENSE)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
+[![CI](https://github.com/roalvesrj/ha-inmet-alertas/actions/workflows/ci.yml/badge.svg)](https://github.com/roalvesrj/ha-inmet-alertas/actions/workflows/ci.yml)
 
 Uma integração profissional para Home Assistant que monitora alertas meteorológicos do Instituto Nacional de Meteorologia (INMET) do Brasil.
 
@@ -22,7 +23,7 @@ Uma integração profissional para Home Assistant que monitora alertas meteorol�
   - Sensor de mapa geográfico com polígonos e áreas afetadas
   - Sensor de diagnóstico com status HTTP, rate limits e erros
 - **Processamento geográfico** - áreas em km², centro geográfico, zoom inteligente
-- **Plugin Leaflet/Mapa** para visualização de polígonos reais no mapa
+- **Mapa com camadas selecionáveis** (plugin do ha-map-card): ligue/desligue as severidades no próprio mapa e alterne o mapa base entre **Cartográfico (OSM)**, **Satélite (Esri)** e **Topográfico (OpenTopoMap)** — sem API key
 - **Eventos personalizados** para automações avançadas
 - **Interface totalmente em português brasileiro**
 
@@ -45,9 +46,9 @@ inmet_alertas/
 │   └── 📄 persistence.py     # Merge/expiração de alertas persistentes
 ├── 📁 docs/              # Documentação detalhada
 ├── 📁 translations/      # Suporte multilíngue (PT/EN)
-├── 📁 brand/             # Ícone da integração
-└── 📁 www/               # Plugin Leaflet para ha-map-card
-tests/                    # Testes: unit (lógica pura) e integration (harness do HA)
+├── 📁 brand/             # Ícone e logo da integração
+└── 📁 www/               # Plugin do ha-map-card (camadas + mapa base)
+tests/                    # Testes: unit e integration (pytest) + js (node --test)
 ```
 
 ### 🔧 Componentes Especializados
@@ -60,8 +61,9 @@ tests/                    # Testes: unit (lógica pura) e integration (harness d
 - **Código documentado** com docstrings em português
 - **Tratamento robusto de erros** em todas as operações
 - **Logs estruturados** para facilitar troubleshooting
-- **Testes automatizados**: `tests/unit` (lógica pura) e `tests/integration` (harness do HA, com 100% de cobertura do config flow)
-- **Integration Quality Scale**: tier Bronze declarado em `quality_scale.yaml`
+- **Testes automatizados**: `tests/unit` + `tests/integration` (pytest, 100% de cobertura do config flow) e `tests/js` (plugin do mapa, `node --test`)
+- **Integration Quality Scale**: tier **Bronze completo**; rumo ao **Silver** — progresso em `quality_scale.yaml`
+- **CI**: hassfest + HACS + pytest + node a cada push
 
 ## 📦 Instalação
 
@@ -196,7 +198,7 @@ fim: "21/09/2025 18:00"
 Disparado especificamente para alertas de severidade **Perigo** ou **Grande Perigo**. Contém os mesmos dados do `inmet_novo_alerta`.
 
 ### `inmet_alerta_expirado`
-Disparado quando um alerta existente é removido por expiração.
+Disparado quando um alerta existente expira. Contém os dados do alerta expirado (`alert_id`, `titulo`, `severidade`, `evento`, `estado`, `inicio`, `fim`, `municipios`, `area_desc`).
 
 ## 🤖 Automações
 
@@ -570,6 +572,12 @@ O plugin está disponível automaticamente em `/hacsfiles/inmet_alertas/plugin_i
 1. Verifique se as notificações estão habilitadas na configuração
 2. Confirme se há alertas de severidade Perigo ou Grande Perigo ativo
 
+### Polígonos não aparecem no mapa (ha-map-card)
+1. Confirme que o **ha-map-card** está instalado e que o plugin aponta para `url: /hacsfiles/inmet_alertas/plugin_inmet_polygons.js`
+2. Verifique o sensor de mapa (`sensor.inmet_alertas_mapa_[estado]`) — sem alertas ativos não há polígonos
+3. Use o controle **"Camadas INMET"** para ligar as severidades desejadas
+4. O **mapa base** pode ser trocado no mesmo controle (Cartográfico/Satélite/Topográfico)
+
 ### Logs Úteis
 ```yaml
 # configuration.yaml
@@ -592,50 +600,30 @@ Este projeto segue o [Versionamento Semântico](https://semver.org/):
 - **MINOR**: Novas funcionalidades compatíveis
 - **PATCH**: Correções de bugs compatíveis
 
-### 🆕 Changelog v1.14.0
+### 🆕 Últimas versões
 
-#### ✨ Novos Recursos
-- **Sensor de Diagnóstico** `sensor.inmet_alertas_diagnostico_[estado]`
-- **Options Flow** — `update_interval` e `notificacoes_perigo` configuráveis dinamicamente
+**v1.16.0** *(em desenvolvimento na `develop`)*
+- 🗺️ Seleção de camadas no mapa: severidades ligáveis + mapa base (Cartográfico/Satélite/Topográfico, sem API key)
+- 🥈 Base do tier **Silver**: `log-when-unavailable`, `PARALLEL_UPDATES` e suíte única de testes (sem mocks de `sys.modules`)
+- 🐛 Feed vazio ou com namespace não quebra mais o parsing do RSS
 
-#### 🐛 Correções
-- **Rate limiting persistente** — CAPs pendentes não são mais descartados
-- **Limite de CAPs** aumentado de 20 para 50 por ciclo
-- **Retry resetado** ao obter sucesso
+**v1.15.0**
+- 🏆 Tier **Bronze** do Integration Quality Scale completo (20/20 regras em `quality_scale.yaml`)
+- 🔄 Config flow v2 com migração automática; ajustes agora em `options`; `runtime_data` tipado
+- 🧪 Primeira suíte com harness real do HA: 100% de cobertura do config flow; CI com hassfest + HACS + pytest
+- 🧹 Módulos mortos removidos, `requirements` vazio e brand completo (ícone + logo)
 
-#### 🧪 Testes
-- Migração para **pytest** com fixtures e HA mock
-- **28 testes unitários** para `check_state_affected`, `GeoProcessor`
-
-### 🆕 Changelog v1.12.0
-
-#### 🗺️ Fase Geográfica (v2.0+)
-- **Sensor de Mapa** `sensor.inmet_alertas_mapa_[estado]` com dados geográficos
-- **Processamento de Polígonos** - extração e cálculo de áreas afetadas em km²
-- **Zoom Inteligente** - cálculo automático do zoom ideal para visualização
-- **Centro Geográfico** - determinação automática do centro das áreas afetadas
-- **Plugin Leaflet** - plugin `plugin_inmet_polygons.js` para ha-map-card
-
-#### 🎉 Melhorias Anteriores
-- **Arquitetura profissional** com módulos especializados (GeoProcessor, RSSParser, etc.)
-- **Documentação expandida** em pasta dedicada
-- **Suporte multilíngue** (Português/Inglês)
-- **Testes organizados** em estrutura própria
-- **Constantes centralizadas** para melhor manutenção
-
-#### 🐛 Correções
-- **Notificações duplicadas** entre estados resolvidas
-- **Rate limiting** tratado com fila de retry inteligente
-- **Persistência de alertas** entre ciclos de atualização
-- **Limpeza automática** de notificações expiradas
+👉 Histórico completo em [CHANGELOG.md](CHANGELOG.md).
 
 ## 📊 Estatísticas do Projeto
 
-- **~2.100 linhas** de código Python (produto) + **~600 linhas** de testes automatizados
+- **~2.150 linhas** de Python (produto) + **~655 linhas** de JavaScript (plugin do mapa)
+- **~880 linhas** de testes automatizados (pytest + node)
 - **+30 arquivos** organizados em estrutura modular
 - **100% em português** (documentação e interface)
-- **Compatibilidade** com Home Assistant 2026.3+
-- **Plugin de mapa** para visualização de polígonos geográficos
+- **Compatibilidade** com Home Assistant 2026.3+ e HACS 2.x
+- **Integration Quality Scale**: Bronze completo, rumo ao Silver
+- **Plugin de mapa** com seleção de camadas e mapa base sem API key
 - **Suporte ativo** da comunidade brasileira
 
 ## 🤝 Contribuindo

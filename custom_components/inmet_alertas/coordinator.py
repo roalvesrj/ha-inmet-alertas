@@ -25,6 +25,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
+    EVENT_ALERTA_EXPIRADO,
     EVENT_ALERTA_PERIGOSO,
     EVENT_NOVO_ALERTA,
     HTTP_TIMEOUT,
@@ -393,6 +394,7 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         ids_antes = set(self._alertas_persistentes)
         ids_scan = {alerta["id"] for alerta in novos_alertas}
+        dados_anteriores = dict(self._alertas_persistentes)
 
         try:
             alertas_finais, cache = mesclar_alertas(
@@ -407,16 +409,46 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         novos = len(ids_scan - ids_antes)
         mantidos = len(ids_antes & ids_depois)
-        removidos = len(ids_antes - ids_depois)
+        ids_expirados = ids_antes - ids_depois
 
-        if mantidos > 0 or removidos > 0:
+        for alert_id in sorted(ids_expirados):
+            self._disparar_evento_expirado(
+                dados_anteriores.get(alert_id, {}), alert_id
+            )
+
+        if mantidos > 0 or ids_expirados:
             _LOGGER.info("🔄 Merge de alertas concluído:")
             _LOGGER.info("  ✨ Novos: %d", novos)
             _LOGGER.info("  📌 Mantidos: %d", mantidos)
-            _LOGGER.info("  ⏰ Removidos (expirados): %d", removidos)
+            _LOGGER.info("  ⏰ Removidos (expirados): %d", len(ids_expirados))
             _LOGGER.info("  📊 Total final: %d", len(cache))
 
         return alertas_finais
+
+    def _disparar_evento_expirado(
+        self, alert_data: dict[str, Any], alert_id: str
+    ) -> None:
+        """Dispara o evento de alerta expirado com os dados conhecidos."""
+        self.hass.bus.async_fire(
+            EVENT_ALERTA_EXPIRADO,
+            {
+                "alert_id": alert_id,
+                "titulo": alert_data.get("titulo", ""),
+                "severidade": alert_data.get("severidade", ""),
+                "evento": alert_data.get("evento", ""),
+                "estado": self.estado,
+                "inicio": alert_data.get("inicio", ""),
+                "fim": alert_data.get("fim", ""),
+                "municipios": alert_data.get(
+                    "total_municipios_estado",
+                    len(alert_data.get("municipios_estado", [])),
+                ),
+                "area_desc": alert_data.get("area_desc", ""),
+            },
+        )
+        _LOGGER.info(
+            "⏰ Alerta expirado: %s - %s", alert_id, alert_data.get("titulo", "")
+        )
 
     async def _cleanup_expired_notifications(
         self, current_alerts: list, previous_ids: set | None = None

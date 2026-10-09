@@ -44,6 +44,7 @@ rules:
   test_coverage:
     status: todo
     comment: >-
-      Meta ≥95% (Silver). Baseline em 2026-10-09: 59% (suíte combinada, HA 2026.9.4).
-      Próximo passo dedicado: testes do coordinator (parsing/rate-limit/merge),
-      atributos das entidades e __init__.
+      Foco atual (Silver): exige >95% em todos os módulos, sem exceções.
+      Baseline em 2026-10-09: ~60% (suíte combinada). Não bloqueante na 1.16.0
+      (Bronze mantido); sprint dedicada de cobertura planejada
+      (coordinator/entidades/__init__).

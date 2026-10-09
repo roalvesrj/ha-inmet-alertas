@@ -25,6 +25,7 @@ const moduleUrl = new URL(
 const {
   default: criarPlugin,
   BASEMAPS,
+  escaparHtml,
   normalizarSeveridades,
   SEVERIDADES,
 } = await import(moduleUrl.href);
@@ -301,4 +302,47 @@ test('opção basemap é aplicada no construtor', () => {
   const { plugin } = criarInstancia({ basemap: 'satelite' });
   assert.equal(plugin._basemapAtual, 'satelite');
   assert.ok(plugin._basemapLayer);
+});
+
+test('escaparHtml neutraliza tags, aspas e &', () => {
+  assert.equal(
+    escaparHtml('<b>"x"</b> & \'y\''),
+    '&lt;b&gt;&quot;x&quot;&lt;/b&gt; &amp; &#39;y&#39;',
+  );
+  assert.equal(escaparHtml(null), '');
+  assert.equal(escaparHtml(undefined), '');
+});
+
+test('popup escapa dados vindos do feed', () => {
+  const { plugin } = criarInstancia();
+
+  const html = plugin.createPopupContent('rio_de_janeiro', 'rj', 'Perigo', {
+    coordenadas: [
+      [-22.9, -43.2],
+      [-22.9, -43.4],
+      [-23.0, -43.4],
+    ],
+    area_km2: 10,
+    evento: '<script>alert(1)</script>',
+    descricao: '<img src=x onerror=alert(1)>',
+    inicio: '01/10 10:00',
+    fim: '01/10 18:00',
+    municipios: ['Rio <b>de</b> Janeiro - RJ'],
+  });
+
+  assert.ok(!html.includes('<script>'), 'script não deve passar cru');
+  assert.ok(!html.includes('<img'), 'img não deve passar cru');
+  assert.ok(html.includes('&lt;script&gt;'));
+});
+
+test('destroy cancela o retry e marca a instância como destruída', async () => {
+  const { plugin } = criarInstancia();
+
+  await plugin.waitForHomeAssistant();
+  assert.ok(plugin._retryTimeoutId, 'retry agendado enquanto HA não aparece');
+
+  plugin.destroy();
+
+  assert.equal(plugin._retryTimeoutId, null);
+  assert.equal(plugin._destruido, true);
 });
