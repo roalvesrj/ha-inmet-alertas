@@ -1,517 +1,385 @@
 /**
- * Plugin para ha-map-card que desenha polígonos dos alertas INMET
- * Mostra as áreas de alerta meteorológico usando coordenadas reais dos alertas
- * 
+ * Plugin INMET para ha-map-card.
+ *
+ * Desenha os polígonos dos alertas do INMET e oferece seleção de camadas:
+ * - Severidade (Grande Perigo / Perigo / Perigo Potencial) via opção
+ *   `severidades` e via controle no mapa.
+ * - Basemap (Cartográfico / Satélite / Topográfico, sem API key) via opção
+ *   `basemap` e via controle no mapa — inspirado no `map_style` do card do
+ *   Flightradar24.
+ *
+ * Opções (todas opcionais):
+ *   states            array de estados em snake_case (padrão: ['rio_de_janeiro'])
+ *   entityPrefix      prefixo das entidades (padrão: 'sensor.inmet_alertas_mapa_')
+ *   updateInterval    intervalo de atualização em ms (padrão: 60000)
+ *   showLabels        tooltip por polígono (padrão: true)
+ *   autoFocus         centraliza o mapa no estado com dados (padrão: true)
+ *   colors            { grandePerigo, perigo, perigoPotencial }
+ *   fillOpacity       opacidade do preenchimento (padrão: 0.5)
+ *   strokeOpacity     opacidade da borda (padrão: 0.8)
+ *   strokeWeight      espessura da borda (padrão: 2)
+ *   severidades       lista/string das severidades visíveis (padrão: todas)
+ *   basemap           'cartografico' | 'satelite' | 'topografico'
+ *                     (padrão: mantém o mapa base do cartão)
+ *   showLayerControl  exibe o controle de camadas (padrão: true)
+ *   basemaps          estende/sobrescreve as definições de basemap
+ *
  * @param L Leaflet library
  * @param pluginBase Base plugin class
  * @param Logger Logger utility
  */
-export default function(L, pluginBase, Logger) {
+
+export const SEVERIDADES = ['Grande Perigo', 'Perigo', 'Perigo Potencial'];
+
+export const CORES_SEVERIDADE = {
+  'Grande Perigo': '#F80703',
+  'Perigo': '#FF8C00',
+  'Perigo Potencial': '#FFFF00',
+};
+
+export const BASEMAPS = {
+  cartografico: {
+    nome: 'Cartográfico (OSM)',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  },
+  satelite: {
+    nome: 'Satélite (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 19,
+  },
+  topografico: {
+    nome: 'Topográfico (OpenTopoMap)',
+    url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
+    maxZoom: 17,
+  },
+};
+
+/**
+ * Normaliza a opção `severidades` em um mapa severidade → visível.
+ * Sem a opção, todas ficam visíveis; com lista/string, apenas as citadas.
+ */
+export function normalizarSeveridades(valor) {
+  if (valor === undefined || valor === null) {
+    return Object.fromEntries(SEVERIDADES.map((severidade) => [severidade, true]));
+  }
+  const lista = Array.isArray(valor) ? valor : [valor];
+  return Object.fromEntries(
+    SEVERIDADES.map((severidade) => [severidade, lista.includes(severidade)]),
+  );
+}
+
+export default function (L, pluginBase, Logger) {
   return class INMETPolygonsPlugin extends pluginBase {
     constructor(map, name, options = {}) {
       super(map, name, options);
-      
-      console.log('🏗️ [INMET] Construindo plugin:', { name, hasMap: !!map, options });
-      
-      // Flags de controle
+
       this._isUpdating = false;
       this._hasLoggedNoHass = false;
-      
-      // Configurações padrão
-      this.entityPrefix = options.entityPrefix || 'sensor.inmet_alertas_mapa_';
-      this.updateInterval = options.updateInterval || 60000; // 1 minuto
-      this.showLabels = options.showLabels !== false; // true por padrão
-      this.autoFocus = options.autoFocus !== false; // true por padrão
-      
-      // Cores por severidade (cores oficiais INMET)
-      this.severityColors = {
-        'Grande Perigo': options.colors?.grandePerigo || '#F80703',  // Vermelho oficial
-        'Perigo': options.colors?.perigo || '#FF8C00',               // Laranja oficial
-        'Perigo Potencial': options.colors?.perigoPotencial || '#FFFF00' // Amarelo oficial
-      };
-      
-      // Opacidades (50% para transparência ideal)
-      this.fillOpacity = options.fillOpacity || 0.5;      // 50% transparência no preenchimento
-      this.strokeOpacity = options.strokeOpacity || 0.8;  // 80% na borda (mais visível)
-      this.strokeWeight = options.strokeWeight || 2;
-      
-      // Estados para monitorar (mapeamento nome completo -> sigla)
-      this.stateMapping = {
-        'acre': 'ac', 'alagoas': 'al', 'amapa': 'ap', 'amazonas': 'am',
-        'bahia': 'ba', 'ceara': 'ce', 'distrito_federal': 'df', 'espirito_santo': 'es',
-        'goias': 'go', 'maranhao': 'ma', 'mato_grosso': 'mt', 'mato_grosso_do_sul': 'ms',
-        'minas_gerais': 'mg', 'para': 'pa', 'paraiba': 'pb', 'parana': 'pr',
-        'pernambuco': 'pe', 'piaui': 'pi', 'rio_de_janeiro': 'rj', 'rio_grande_do_norte': 'rn',
-        'rio_grande_do_sul': 'rs', 'rondonia': 'ro', 'roraima': 'rr', 'santa_catarina': 'sc',
-        'sao_paulo': 'sp', 'sergipe': 'se', 'tocantins': 'to'
-      };
-      
-      // Estados configurados pelo usuário - com fallback para RJ (que tem dados)
-      this.states = options.states || ['rio_de_janeiro'];
-      console.log('📍 [INMET] Estados configurados:', this.states);
-      
-      // Armazenar layers dos polígonos
-      this.polygonLayerGroup = L.layerGroup().addTo(this.map);
       this.intervalId = null;
-      
-      Logger.debug(`[INMETPolygonsPlugin] Inicializado plugin: ${this.name} com ${this.states.length} estados`);
+
+      this.entityPrefix = options.entityPrefix || 'sensor.inmet_alertas_mapa_';
+      this.updateInterval = options.updateInterval || 60000;
+      this.showLabels = options.showLabels !== false;
+      this.autoFocus = options.autoFocus !== false;
+      this.showLayerControl = options.showLayerControl !== false;
+
+      this.severityColors = {
+        'Grande Perigo': options.colors?.grandePerigo || CORES_SEVERIDADE['Grande Perigo'],
+        'Perigo': options.colors?.perigo || CORES_SEVERIDADE['Perigo'],
+        'Perigo Potencial':
+          options.colors?.perigoPotencial || CORES_SEVERIDADE['Perigo Potencial'],
+      };
+
+      this.fillOpacity = options.fillOpacity ?? 0.5;
+      this.strokeOpacity = options.strokeOpacity ?? 0.8;
+      this.strokeWeight = options.strokeWeight || 2;
+
+      this.basemaps = { ...BASEMAPS };
+      for (const [chave, definicao] of Object.entries(options.basemaps || {})) {
+        this.basemaps[chave] = { ...(this.basemaps[chave] || {}), ...definicao };
+      }
+
+      this.stateMapping = {
+        acre: 'ac', alagoas: 'al', amapa: 'ap', amazonas: 'am',
+        bahia: 'ba', ceara: 'ce', distrito_federal: 'df', espirito_santo: 'es',
+        goias: 'go', maranhao: 'ma', mato_grosso: 'mt', mato_grosso_do_sul: 'ms',
+        minas_gerais: 'mg', para: 'pa', paraiba: 'pb', parana: 'pr',
+        pernambuco: 'pe', piaui: 'pi', rio_de_janeiro: 'rj', rio_grande_do_norte: 'rn',
+        rio_grande_do_sul: 'rs', rondonia: 'ro', roraima: 'rr', santa_catarina: 'sc',
+        sao_paulo: 'sp', sergipe: 'se', tocantins: 'to',
+      };
+
+      this.states = options.states || ['rio_de_janeiro'];
+
+      // Camadas por severidade (visibilidade controlável individualmente)
+      this.layerVisibility = normalizarSeveridades(options.severidades);
+      this.severityLayerGroups = Object.fromEntries(
+        SEVERIDADES.map((severidade) => [severidade, L.layerGroup()]),
+      );
+      this._severityCounts = Object.fromEntries(
+        SEVERIDADES.map((severidade) => [severidade, 0]),
+      );
+      this._groupsOnMap = Object.fromEntries(
+        SEVERIDADES.map((severidade) => [severidade, false]),
+      );
+
+      // Basemap
+      this._basemapAtual = null;
+      this._basemapLayer = null;
+      this._camadasBaseDoCartao = null;
+
+      // Controle de camadas (criado sob demanda, quando há mapa/pronto)
+      this._layerControl = null;
+      this._controleEl = null;
+      this._radioGroupName = `inmet-basemap-${String(name || 'plugin').replace(/\s+/g, '-')}`;
+      this._estilosInjetados = false;
+
+      if (options.basemap) {
+        this.setBasemap(options.basemap);
+      }
+
+      Logger.debug(
+        `[INMETPolygonsPlugin] Inicializado: ${this.name} (${this.states.length} estados)`,
+      );
     }
 
     async init() {
-      console.log('🚀 [INMET] Inicializando plugin...');
-      
-      // Aguardar Home Assistant estar disponível antes de configurar intervalo
       this.waitForHomeAssistant();
     }
-    
+
     async waitForHomeAssistant() {
-      console.log('⏳ [INMET] Aguardando Home Assistant...');
-      
       let attempts = 0;
-      const maxAttempts = 30; // 1 minuto tentando
-      
+      const maxAttempts = 30; // ~1 minuto
+
       const checkHass = () => {
         attempts++;
-        
-        // Tentar múltiplas formas de acessar o Home Assistant
+
         let hass = null;
-        
-        // Método 1: Via plugin
         if (this.hass && this.hass.states) {
           hass = this.hass;
-          console.log('✅ [INMET] HA encontrado via plugin.hass');
-        }
-        
-        // Método 2: Via window
-        else if (window.hass && window.hass.states) {
+        } else if (typeof window !== 'undefined' && window.hass?.states) {
           hass = window.hass;
-          console.log('✅ [INMET] HA encontrado via window.hass');
-        }
-        
-        // Método 3: Via document (algumas versões)
-        else if (typeof document !== 'undefined') {
+        } else if (typeof document !== 'undefined') {
           const homeAssistant = document.querySelector('home-assistant');
-          if (homeAssistant && homeAssistant.hass && homeAssistant.hass.states) {
+          if (homeAssistant?.hass?.states) {
             hass = homeAssistant.hass;
-            console.log('✅ [INMET] HA encontrado via home-assistant element');
           }
         }
-        
-        // Método 4: Via window.__HASS__ (backup)
-        else if (window.__HASS__ && window.__HASS__.states) {
-          hass = window.__HASS__;
-          console.log('✅ [INMET] HA encontrado via window.__HASS__');
-        }
-        
+
         if (hass) {
-          // Armazenar referência para uso futuro
           this._hassRef = hass;
-          
-          console.log('✅ [INMET] Home Assistant disponível! Testando sensores...');
-          
-          // Testar se temos o sensor RJ
-          const rjSensor = hass.states['sensor.inmet_alertas_mapa_rj'];
-          if (rjSensor) {
-            console.log('📊 [INMET] Sensor RJ encontrado:', rjSensor.state, 'polígonos');
-            if (rjSensor.attributes.camadas_por_severidade) {
-              console.log('🗺️ [INMET] Dados geográficos disponíveis');
-            }
-          } else {
-            console.warn('⚠️ [INMET] Sensor RJ não encontrado. Sensores disponíveis:', 
-              Object.keys(hass.states).filter(id => id.startsWith('sensor.inmet')));
-          }
-          
-          // Primeira atualização
           this.update();
-          
-          // Configurar intervalo de atualização
+
           if (!this.intervalId) {
-            this.intervalId = setInterval(() => {
-              this.update();
-            }, this.updateInterval);
-            console.log(`🔄 [INMET] Intervalo configurado: ${this.updateInterval}ms`);
+            this.intervalId = setInterval(() => this.update(), this.updateInterval);
           }
-          
         } else if (attempts < maxAttempts) {
-          // Tentar novamente em 2 segundos
-          console.log(`⏳ [INMET] Tentativa ${attempts}/${maxAttempts} - Aguardando HA...`);
           setTimeout(checkHass, 2000);
         } else {
-          console.error('❌ [INMET] Timeout: Home Assistant não foi encontrado após 1 minuto');
+          Logger.warn(
+            '[INMETPolygonsPlugin] Home Assistant não encontrado após 1 minuto',
+          );
         }
       };
-      
+
       checkHass();
     }
 
     async renderMap() {
-      Logger.debug(`[INMETPolygonsPlugin] Renderizando mapa inicial para plugin: ${this.name}`);
-      
-      // Verificar se temos acesso ao hass
-      if (!window.hass) {
-        Logger.error('[INMETPolygonsPlugin] Home Assistant não disponível');
-        return;
-      }
-      
-      // Renderização inicial
       await this.updatePolygons();
     }
 
     async update() {
-      // Evitar múltiplas chamadas simultâneas
       if (this._isUpdating) {
         return;
       }
-      
       this._isUpdating = true;
-      
+
       try {
-        // Usar a referência armazenada ou tentar encontrar HA
-        const hass = this._hassRef || this.hass || window.hass;
+        const hass = this._obterHass();
         if (!hass || !hass.states) {
-          // Não fazer logs repetitivos - só avisar uma vez
           if (!this._hasLoggedNoHass) {
-            console.warn('⚠️ [INMET] Aguardando Home Assistant...');
-            console.log('🔍 [INMET] Referencias:', {
-              hasHassRef: !!this._hassRef,
-              hasThisHass: !!this.hass,
-              hasWindowHass: !!window.hass
-            });
+            Logger.debug('[INMETPolygonsPlugin] Aguardando Home Assistant...');
             this._hasLoggedNoHass = true;
           }
           return;
         }
-        
-        // Reset do flag se conseguimos conectar
         this._hasLoggedNoHass = false;
-        
-        console.log('🔄 [INMET] Atualizando polígonos...');
-        
         await this.updatePolygons();
-        
       } catch (error) {
-        console.error('❌ [INMET] Erro no update:', error);
+        Logger.error('[INMETPolygonsPlugin] Erro no update:', error);
       } finally {
-        // Liberar após pequeno delay
         setTimeout(() => {
           this._isUpdating = false;
         }, 500);
       }
-      
-      // Usar window.hass se this.hass não estiver disponível
-      const hass = this.hass || window.hass;
-      
-      // Debug: listar sensores INMET
-      if (hass && hass.states) {
-        const allInmetSensors = Object.keys(hass.states).filter(id => id.startsWith('sensor.inmet'));
-        console.log('🔍 [INMET] Sensores encontrados:', {
-          total: allInmetSensors.length,
-          sensores: allInmetSensors
-        });
-        
-        const mapSensors = allInmetSensors.filter(id => id.includes('_mapa_'));
-        console.log('🗺️ [INMET] Sensores de mapa:', mapSensors);
-        
-        mapSensors.forEach(id => {
-          const sensor = hass.states[id];
-          console.log(`   📊 ${id}:`, {
-            state: sensor.state,
-            hasCamadas: !!sensor.attributes.camadas_por_severidade,
-            camadas: sensor.attributes.camadas_por_severidade ? Object.keys(sensor.attributes.camadas_por_severidade) : []
-          });
-        });
+    }
+
+    _obterHass() {
+      if (this._hassRef || this.hass) {
+        return this._hassRef || this.hass;
       }
-      
-      await this.updatePolygons();
+      if (typeof window !== 'undefined') {
+        return window.hass;
+      }
+      return null;
     }
 
     async updatePolygons() {
       try {
-        console.log('🔄 [INMET] Iniciando updatePolygons...');
-        
-        // Limpar polígonos existentes
         this.clearPolygons();
-        
-        // Usar a referência armazenada ou tentar encontrar HA
-        const hass = this._hassRef || this.hass || window.hass;
-        
+
+        const hass = this._obterHass();
         if (!hass || !hass.states) {
-          console.error('❌ [INMET] Home Assistant states não disponível');
-          console.log('🔍 [INMET] Debug - Referencias disponíveis:', {
-            hasHassRef: !!this._hassRef,
-            hasThisHass: !!this.hass,
-            hasWindowHass: !!window.hass
-          });
+          Logger.debug('[INMETPolygonsPlugin] Home Assistant states indisponível');
           return;
         }
-        
-        console.log('✅ [INMET] Usando Home Assistant para buscar dados...');
-        
-        console.log(`🔄 [INMET] Processando ${this.states.length} estados configurados:`, this.states);
-        
-        // DEBUG: Verificar se temos sensores de MG e ES também
-        const allInmetSensors = Object.keys(hass.states).filter(id => id.startsWith('sensor.inmet_alertas_mapa_'));
-        console.log('🔍 [DEBUG] Todos os sensores de mapa disponíveis:', allInmetSensors);
-        
-        // Verificar especificamente MG e ES
-        const mgSensor = hass.states['sensor.inmet_alertas_mapa_mg'];
-        const esSensor = hass.states['sensor.inmet_alertas_mapa_es'];
-        
-        if (mgSensor) {
-          console.log('📊 [DEBUG] Sensor MG:', mgSensor.state, 'polígonos', mgSensor.attributes.camadas_por_severidade ? 'COM dados geo' : 'SEM dados geo');
-        }
-        
-        if (esSensor) {
-          console.log('📊 [DEBUG] Sensor ES:', esSensor.state, 'polígonos', esSensor.attributes.camadas_por_severidade ? 'COM dados geo' : 'SEM dados geo');
-        }
-        
+
         let totalPolygons = 0;
-        
-        // Processar cada estado configurado
+
         for (const estadoNome of this.states) {
           const estadoSigla = this.stateMapping[estadoNome];
           if (!estadoSigla) {
             Logger.warn(`[INMETPolygonsPlugin] Estado não mapeado: ${estadoNome}`);
             continue;
           }
-          
-          const entityId = `${this.entityPrefix}${estadoSigla}`;
-          const entity = hass.states[entityId];  // Usar a referência correta
-          
-          if (!entity) {
-            console.log(`🔍 [INMET] Entidade não encontrada: ${entityId}`);
-            continue;
-          }
-          
-          console.log(`📊 [INMET] Processando: ${entityId} - ${entity.state} polígonos`);
-          
-          // DEBUG: Mostrar coordenadas do polígono para análise
-          if (entity.attributes.camadas_por_severidade) {
-            for (const [severidade, dados] of Object.entries(entity.attributes.camadas_por_severidade)) {
-              console.log(`🔍 [DEBUG] ${estadoNome} - ${severidade}:`, dados.total_poligonos, 'polígonos');
-              dados.poligonos.forEach((pol, idx) => {
-                const coords = pol.coordenadas;
-                if (coords && coords.length > 0) {
-                  const minLat = Math.min(...coords.map(c => c[0]));
-                  const maxLat = Math.max(...coords.map(c => c[0]));
-                  const minLon = Math.min(...coords.map(c => c[1])); 
-                  const maxLon = Math.max(...coords.map(c => c[1]));
-                  console.log(`   📐 Polígono ${idx}: Lat ${minLat.toFixed(2)} a ${maxLat.toFixed(2)}, Lon ${minLon.toFixed(2)} a ${maxLon.toFixed(2)}`);
-                  console.log(`   🎯 Centro: [${pol.centro}], Área: ${pol.area_km2} km²`);
-                  console.log(`   🏛️ Municípios: ${pol.municipios ? pol.municipios.slice(0,3).join(', ') : 'N/A'}`);
-                }
-              });
-            }
-          }
-          
-          // Processar polígonos desta entidade
-          const polygonsAdded = await this.processStateEntity(estadoNome, estadoSigla, entity);
-          totalPolygons += polygonsAdded;
-          
-          console.log(`✅ [INMET] ${estadoNome}: ${polygonsAdded} polígonos adicionados`);
-        }
-        
-        Logger.debug(`[INMETPolygonsPlugin] Atualização completa - ${totalPolygons} polígonos adicionados ao mapa`);
-        
-        // AutoFocus: centralizar mapa no estado se configurado
-        if (this.autoFocus && totalPolygons > 0) {
-          this._autoFocusMap();
-        }
-        
-      } catch (error) {
-        Logger.error(`[INMETPolygonsPlugin] Erro na atualização:`, error);
-      }
-    }
-
-    _autoFocusMap() {
-      try {
-        const hass = this._hassRef || this.hass || window.hass;
-        if (!hass || !hass.states) return;
-
-        let bestEntity = null;
-        let bestSigla = null;
-
-        // Procurar o primeiro estado configurado com dados geográficos
-        for (const estadoNome of this.states) {
-          const estadoSigla = this.stateMapping[estadoNome];
-          if (!estadoSigla) continue;
 
           const entityId = `${this.entityPrefix}${estadoSigla}`;
           const entity = hass.states[entityId];
-          if (!entity || !entity.attributes) continue;
-
-          const attrs = entity.attributes;
-
-          // Usar centro_geografico e zoom_recomendado se disponíveis
-          if (attrs.centro_geografico) {
-            bestEntity = entity;
-            bestSigla = estadoSigla.toUpperCase();
-            break;
+          if (!entity) {
+            Logger.debug(`[INMETPolygonsPlugin] Entidade não encontrada: ${entityId}`);
+            continue;
           }
+
+          totalPolygons += this.processStateEntity(estadoNome, estadoSigla, entity);
         }
 
-        if (!bestEntity) return;
+        // Aplica visibilidade das camadas e atualiza o controle
+        this.aplicarVisibilidade();
 
-        const attrs = bestEntity.attributes;
-        let center = attrs.centro_geografico;
-        let zoom = attrs.zoom_recomendado;
+        // Com basemap ativo, captura/oculta tiles que o cartão possa recriar
+        if (this._basemapAtual) {
+          this._ocultarCamadasBaseDoCartao();
+        }
+        this._criarAtualizarControle();
 
-        // Fallback: calcular centro da bounding box
-        if (!center && attrs.bounding_box) {
-          const bb = attrs.bounding_box;
-          center = [
-            (bb.min_lat + bb.max_lat) / 2,
-            (bb.min_lon + bb.max_lon) / 2
-          ];
+        if (this.autoFocus && totalPolygons > 0) {
+          this._autoFocusMap();
         }
 
-        if (center && Array.isArray(center) && center.length >= 2) {
-          console.log(`📍 [INMET] AutoFocus: centralizando em [${center[0].toFixed(4)}, ${center[1].toFixed(4)}] zoom ${zoom || 8}`);
-          this.map.setView(center, zoom || 8);
-        }
+        Logger.debug(
+          `[INMETPolygonsPlugin] Atualização completa - ${totalPolygons} polígonos`,
+        );
       } catch (error) {
-        console.error('❌ [INMET] Erro no autoFocus:', error);
+        Logger.error('[INMETPolygonsPlugin] Erro na atualização:', error);
       }
     }
 
-    async processStateEntity(estadoNome, estadoSigla, entity) {
-      try {
-        const attributes = entity.attributes || {};
-        let polygonCount = 0;
-        
-        // Verificar se há dados geográficos (camadas por severidade)
-        if (!attributes.camadas_por_severidade) {
-          Logger.debug(`[INMETPolygonsPlugin] Sem dados geográficos para ${estadoNome} (${estadoSigla})`);
-          return polygonCount;
-        }
-        
-        const camadasData = attributes.camadas_por_severidade;
-        const camadasDisponiveis = Object.keys(camadasData);
-        
-        Logger.debug(`[INMETPolygonsPlugin] Processando ${estadoNome} - Camadas disponíveis:`, camadasDisponiveis);
-        
-        // Processar cada nível de severidade em ordem de prioridade
-        const severidadesOrdem = ['Grande Perigo', 'Perigo', 'Perigo Potencial'];
-        
-        for (const severity of severidadesOrdem) {
-          const camadaInfo = camadasData[severity];
-          
-          if (camadaInfo && camadaInfo.poligonos && camadaInfo.poligonos.length > 0) {
-            Logger.debug(`[INMETPolygonsPlugin] Criando camada ${severity} para ${estadoNome} com ${camadaInfo.poligonos.length} polígonos`);
-            
-            const polygonsAdded = this.createPolygonLayer(estadoNome, estadoSigla, severity, camadaInfo.poligonos);
-            polygonCount += polygonsAdded;
-          }
-        }
-        
-        if (polygonCount > 0) {
-          Logger.debug(`[INMETPolygonsPlugin] Estado ${estadoNome}: ${polygonCount} polígonos adicionados`);
-        }
-        
-        return polygonCount;
-        
-      } catch (error) {
-        Logger.error(`[INMETPolygonsPlugin] Erro processando ${estadoNome}:`, error);
+    processStateEntity(estadoNome, estadoSigla, entity) {
+      const attributes = entity.attributes || {};
+
+      if (!attributes.camadas_por_severidade) {
+        Logger.debug(
+          `[INMETPolygonsPlugin] Sem dados geográficos para ${estadoNome} (${estadoSigla})`,
+        );
         return 0;
       }
+
+      const camadasData = attributes.camadas_por_severidade;
+      let polygonCount = 0;
+
+      for (const severity of SEVERIDADES) {
+        const camadaInfo = camadasData[severity];
+        if (camadaInfo?.poligonos?.length > 0) {
+          polygonCount += this.createPolygonLayer(
+            estadoNome,
+            estadoSigla,
+            severity,
+            camadaInfo.poligonos,
+          );
+        }
+      }
+
+      return polygonCount;
     }
 
     createPolygonLayer(estadoNome, estadoSigla, severity, polygons) {
-      try {
-        const color = this.severityColors[severity];
-        if (!color) {
-          Logger.warn(`[INMETPolygonsPlugin] Cor não definida para severidade: ${severity}`);
-          return 0;
-        }
-        
-        let polygonsAdded = 0;
-        
-        // Processar cada polígono individualmente
-        polygons.forEach((polygon, index) => {
-          if (!polygon.coordenadas || polygon.coordenadas.length === 0) {
-            Logger.debug(`[INMETPolygonsPlugin] Polígono ${index} sem coordenadas válidas`);
-            return;
-          }
-          
-          try {
-            // Validar formato das coordenadas
-            if (!Array.isArray(polygon.coordenadas) || polygon.coordenadas.length < 3) {
-              Logger.debug(`[INMETPolygonsPlugin] Coordenadas insuficientes para polígono ${index}`);
-              return;
-            }
-            
-            // Configurar opções de estilo (sempre aplicar transparência)
-            const polygonOptions = {
-              color: color,
-              weight: this.strokeWeight,
-              opacity: this.strokeOpacity,
-              fillColor: color,
-              fillOpacity: this.fillOpacity,  // Garantir 50% transparência
-              interactive: true,
-              bubblingMouseEvents: false
-            };
-            
-            // Criar polígono Leaflet com opções explícitas
-            const leafletPolygon = L.polygon(polygon.coordenadas, polygonOptions);
-            
-            // Forçar aplicação das opções de estilo (correção para transparência)
-            leafletPolygon.setStyle({
-              fillOpacity: this.fillOpacity,
-              opacity: this.strokeOpacity
-            });
-            
-            // Adicionar popup com informações
-            const popupContent = this.createPopupContent(estadoNome, estadoSigla, severity, polygon, index);
-            leafletPolygon.bindPopup(popupContent);
-            
-            // Adicionar tooltip se habilitado
-            if (this.showLabels) {
-              const tooltipContent = `${severity} - ${estadoNome}`;
-              leafletPolygon.bindTooltip(tooltipContent, {
-                permanent: false,
-                direction: 'center',
-                className: 'inmet-polygon-tooltip'
-              });
-            }
-            
-            // Adicionar ao grupo principal
-            this.polygonLayerGroup.addLayer(leafletPolygon);
-            polygonsAdded++;
-            
-            // Debug da transparência aplicada
-            console.log(`🎨 [INMET] Polígono ${index} - Transparência: fillOpacity=${leafletPolygon.options.fillOpacity}, opacity=${leafletPolygon.options.opacity}`);
-            
-            Logger.debug(`[INMETPolygonsPlugin] Polígono ${index} adicionado: ${severity} em ${estadoNome} (${polygon.area_km2} km²)`);
-            
-          } catch (polygonError) {
-            Logger.error(`[INMETPolygonsPlugin] Erro criando polígono ${index} para ${estadoNome}/${severity}:`, polygonError);
-          }
-        });
-        
-        if (polygonsAdded > 0) {
-          Logger.debug(`[INMETPolygonsPlugin] Camada ${severity} em ${estadoNome}: ${polygonsAdded} polígonos criados`);
-        }
-        
-        return polygonsAdded;
-        
-      } catch (error) {
-        Logger.error(`[INMETPolygonsPlugin] Erro criando camada para ${estadoNome}/${severity}:`, error);
+      const color = this.severityColors[severity];
+      if (!color) {
+        Logger.warn(`[INMETPolygonsPlugin] Cor não definida para severidade: ${severity}`);
         return 0;
       }
+
+      const grupo = this.severityLayerGroups[severity];
+      let polygonsAdded = 0;
+
+      polygons.forEach((polygon, index) => {
+        if (!Array.isArray(polygon.coordenadas) || polygon.coordenadas.length < 3) {
+          Logger.debug(
+            `[INMETPolygonsPlugin] Coordenadas insuficientes para polígono ${index}`,
+          );
+          return;
+        }
+
+        try {
+          const polygonOptions = {
+            color,
+            weight: this.strokeWeight,
+            opacity: this.strokeOpacity,
+            fillColor: color,
+            fillOpacity: this.fillOpacity,
+            interactive: true,
+            bubblingMouseEvents: false,
+          };
+
+          const leafletPolygon = L.polygon(polygon.coordenadas, polygonOptions);
+          leafletPolygon.setStyle({
+            fillOpacity: this.fillOpacity,
+            opacity: this.strokeOpacity,
+          });
+
+          leafletPolygon.bindPopup(
+            this.createPopupContent(estadoNome, estadoSigla, severity, polygon, index),
+          );
+
+          if (this.showLabels) {
+            leafletPolygon.bindTooltip(`${severity} - ${estadoNome}`, {
+              permanent: false,
+              direction: 'center',
+              className: 'inmet-polygon-tooltip',
+            });
+          }
+
+          grupo.addLayer(leafletPolygon);
+          this._severityCounts[severity] += 1;
+          polygonsAdded++;
+        } catch (polygonError) {
+          Logger.error(
+            `[INMETPolygonsPlugin] Erro criando polígono ${index} para ${estadoNome}/${severity}:`,
+            polygonError,
+          );
+        }
+      });
+
+      return polygonsAdded;
     }
 
     createPopupContent(estadoNome, estadoSigla, severity, polygon, index) {
-      const estadoFormatado = estadoNome.charAt(0).toUpperCase() + estadoNome.slice(1).replace(/_/g, ' ');
-      
-      // Ícone por severidade
+      const estadoFormatado =
+        estadoNome.charAt(0).toUpperCase() + estadoNome.slice(1).replace(/_/g, ' ');
+
       const icons = {
         'Grande Perigo': '🔴',
-        'Perigo': '🟠', 
-        'Perigo Potencial': '🟡'
+        'Perigo': '🟠',
+        'Perigo Potencial': '🟡',
       };
-      
       const icon = icons[severity] || '⚠️';
-      
+
       let content = `
         <div class="inmet-popup" style="min-width: 250px;">
           <h3 style="margin: 0 0 10px 0; color: ${this.severityColors[severity]};">
@@ -522,107 +390,366 @@ export default function(L, pluginBase, Logger) {
             <p style="margin: 5px 0;"><strong>Evento:</strong> ${polygon.evento || 'Alerta Meteorológico'}</p>
             <p style="margin: 5px 0;"><strong>Área:</strong> ${polygon.area_km2?.toFixed(1) || 'N/A'} km²</p>
       `;
-      
+
       if (polygon.centro && Array.isArray(polygon.centro) && polygon.centro.length >= 2) {
         content += `<p style="margin: 5px 0;"><strong>Centro:</strong> ${polygon.centro[0].toFixed(4)}, ${polygon.centro[1].toFixed(4)}</p>`;
       }
-      
+
       if (polygon.inicio && polygon.fim) {
         content += `
           <p style="margin: 5px 0;"><strong>Início:</strong> ${polygon.inicio}</p>
           <p style="margin: 5px 0;"><strong>Fim:</strong> ${polygon.fim}</p>
         `;
       }
-      
+
       if (polygon.descricao) {
-        const shortDesc = polygon.descricao.length > 120 ? 
-          polygon.descricao.substring(0, 120) + '...' : 
-          polygon.descricao;
+        const shortDesc =
+          polygon.descricao.length > 120
+            ? polygon.descricao.substring(0, 120) + '...'
+            : polygon.descricao;
         content += `<p style="margin: 5px 0;"><strong>Descrição:</strong> ${shortDesc}</p>`;
       }
-      
+
       if (polygon.municipios && Array.isArray(polygon.municipios) && polygon.municipios.length > 0) {
-        const municipiosText = polygon.municipios.length > 3 ? 
-          polygon.municipios.slice(0, 3).join(', ') + ` e mais ${polygon.municipios.length - 3}` :
-          polygon.municipios.join(', ');
+        const municipiosText =
+          polygon.municipios.length > 3
+            ? polygon.municipios.slice(0, 3).join(', ') +
+              ` e mais ${polygon.municipios.length - 3}`
+            : polygon.municipios.join(', ');
         content += `<p style="margin: 5px 0;"><strong>Municípios:</strong> ${municipiosText}</p>`;
       }
-      
+
       content += `
           </div>
           <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee; font-size: 11px; color: #666;">
             INMET - Instituto Nacional de Meteorologia
           </div>
         </div>`;
-      
+
       return content;
     }
 
-    clearPolygons() {
-      try {
-        if (this.polygonLayerGroup) {
-          // Fechar popups antes de limpar
-          this.polygonLayerGroup.eachLayer((layer) => {
-            if (layer.getPopup) {
-              layer.closePopup();
-            }
-            if (layer.getTooltip) {
-              layer.unbindTooltip();
-            }
-          });
-          
-          // Limpar todas as camadas
-          this.polygonLayerGroup.clearLayers();
-          console.log('🧹 [INMET] Polígonos limpos - mantendo transparência');
+    /**
+     * Liga/desliga uma camada de severidade (API pública, usada pelo controle).
+     */
+    setLayerVisibility(severity, visivel) {
+      if (!SEVERIDADES.includes(severity)) {
+        return;
+      }
+      this.layerVisibility[severity] = !!visivel;
+      this.aplicarVisibilidade();
+      this._atualizarControleValores();
+    }
+
+    /**
+     * Aplica a visibilidade atual de todas as camadas ao mapa (idempotente).
+     */
+    aplicarVisibilidade() {
+      for (const severity of SEVERIDADES) {
+        const grupo = this.severityLayerGroups?.[severity];
+        if (!grupo || !this.map) {
+          continue;
         }
-      } catch (error) {
-        console.error('❌ [INMET] Erro limpando polígonos:', error);
+        const visivel = this.layerVisibility[severity];
+        const estaNoMapa = this._groupsOnMap[severity];
+
+        if (visivel && !estaNoMapa) {
+          this.map.addLayer(grupo);
+          this._groupsOnMap[severity] = true;
+        } else if (!visivel && estaNoMapa) {
+          this.map.removeLayer(grupo);
+          this._groupsOnMap[severity] = false;
+        }
       }
     }
-    
+
+    /**
+     * Troca o mapa base (null volta para o mapa padrão do cartão).
+     * Os tiles originais do cartão são ocultados e restaurados.
+     */
+    setBasemap(id) {
+      const alvo = id === null || id === undefined || id === 'padrao' ? null : id;
+
+      if (alvo !== null && !this.basemaps[alvo]) {
+        Logger.warn(`[INMETPolygonsPlugin] Basemap desconhecido: ${id}`);
+        return;
+      }
+      if (alvo === this._basemapAtual && (alvo === null || this._basemapLayer)) {
+        return;
+      }
+
+      if (alvo === null) {
+        if (this._basemapLayer) {
+          this.map.removeLayer(this._basemapLayer);
+          this._basemapLayer = null;
+        }
+        this._basemapAtual = null;
+        this._restaurarCamadasBaseDoCartao();
+      } else {
+        this._ocultarCamadasBaseDoCartao();
+        if (this._basemapLayer) {
+          this.map.removeLayer(this._basemapLayer);
+        }
+        const definicao = this.basemaps[alvo];
+        this._basemapLayer = L.tileLayer(definicao.url, {
+          attribution: definicao.attribution,
+          maxZoom: definicao.maxZoom,
+        });
+        this.map.addLayer(this._basemapLayer);
+        this._basemapAtual = alvo;
+      }
+
+      this._atualizarControleValores();
+    }
+
+    _ocultarCamadasBaseDoCartao() {
+      if (this._camadasBaseDoCartao === null) {
+        this._camadasBaseDoCartao = [];
+      }
+      this.map.eachLayer((layer) => {
+        if (
+          layer instanceof L.TileLayer &&
+          layer !== this._basemapLayer &&
+          !this._camadasBaseDoCartao.includes(layer)
+        ) {
+          this._camadasBaseDoCartao.push(layer);
+          this.map.removeLayer(layer);
+        }
+      });
+    }
+
+    _restaurarCamadasBaseDoCartao() {
+      if (!this._camadasBaseDoCartao) {
+        return;
+      }
+      for (const layer of this._camadasBaseDoCartao) {
+        this.map.addLayer(layer);
+      }
+      this._camadasBaseDoCartao = null;
+    }
+
+    _autoFocusMap() {
+      try {
+        const hass = this._obterHass();
+        if (!hass || !hass.states) {
+          return;
+        }
+
+        let bestEntity = null;
+        for (const estadoNome of this.states) {
+          const estadoSigla = this.stateMapping[estadoNome];
+          if (!estadoSigla) {
+            continue;
+          }
+          const entity = hass.states[`${this.entityPrefix}${estadoSigla}`];
+          if (entity?.attributes?.centro_geografico) {
+            bestEntity = entity;
+            break;
+          }
+        }
+
+        if (!bestEntity) {
+          return;
+        }
+
+        const attrs = bestEntity.attributes;
+        let center = attrs.centro_geografico;
+        const zoom = attrs.zoom_recomendado;
+
+        if (!center && attrs.bounding_box) {
+          const bb = attrs.bounding_box;
+          center = [(bb.min_lat + bb.max_lat) / 2, (bb.min_lon + bb.max_lon) / 2];
+        }
+
+        if (center && Array.isArray(center) && center.length >= 2) {
+          this.map.setView(center, zoom || 8);
+        }
+      } catch (error) {
+        Logger.error('[INMETPolygonsPlugin] Erro no autoFocus:', error);
+      }
+    }
+
+    // --- Controle de camadas (UI) ---
+
+    _criarAtualizarControle() {
+      if (!this.showLayerControl || typeof document === 'undefined') {
+        return;
+      }
+
+      if (!this._layerControl) {
+        const control = L.control({ position: 'topright' });
+        control.onAdd = () => this._montarControle();
+        control.onRemove = () => {
+          this._controleEl = null;
+        };
+        this._layerControl = control;
+        this.map.addControl(control);
+      }
+
+      this._atualizarControleValores();
+    }
+
+    _montarControle() {
+      this._injetarEstilos();
+
+      const el = document.createElement('div');
+      el.className = 'inmet-camadas';
+
+      const linhasBasemap = [
+        `<label><input type="radio" name="${this._radioGroupName}" value="padrao"> Padrão do cartão</label>`,
+      ];
+      for (const [chave, definicao] of Object.entries(this.basemaps)) {
+        linhasBasemap.push(
+          `<label><input type="radio" name="${this._radioGroupName}" value="${chave}"> ${definicao.nome}</label>`,
+        );
+      }
+
+      const linhasSeveridade = SEVERIDADES.map(
+        (severidade) => `
+          <label>
+            <input type="checkbox" data-inmet-severidade="${severidade}">
+            <span class="inmet-cor" style="background: ${this.severityColors[severidade]};"></span>
+            ${severidade} (<span data-inmet-contagem="${severidade}">0</span>)
+          </label>`,
+      ).join('');
+
+      el.innerHTML = `
+        <div class="inmet-camadas-titulo">Camadas INMET</div>
+        <div class="inmet-camadas-secao">Mapa base</div>
+        ${linhasBasemap.join('')}
+        <div class="inmet-camadas-secao">Alertas</div>
+        ${linhasSeveridade}
+      `;
+
+      el.querySelectorAll(`input[name="${this._radioGroupName}"]`).forEach((input) => {
+        input.addEventListener('change', (evento) => {
+          if (evento.target.checked) {
+            this.setBasemap(evento.target.value === 'padrao' ? null : evento.target.value);
+          }
+        });
+      });
+
+      el.querySelectorAll('input[data-inmet-severidade]').forEach((input) => {
+        input.addEventListener('change', (evento) => {
+          this.setLayerVisibility(
+            evento.target.dataset.inmetSeveridade,
+            evento.target.checked,
+          );
+        });
+      });
+
+      this._controleEl = el;
+      return el;
+    }
+
+    _atualizarControleValores() {
+      if (!this._controleEl) {
+        return;
+      }
+
+      for (const severidade of SEVERIDADES) {
+        const contagem = this._controleEl.querySelector(
+          `[data-inmet-contagem="${severidade}"]`,
+        );
+        if (contagem) {
+          contagem.textContent = String(this._severityCounts[severidade] || 0);
+        }
+        const checkbox = this._controleEl.querySelector(
+          `input[data-inmet-severidade="${severidade}"]`,
+        );
+        if (checkbox) {
+          checkbox.checked = this.layerVisibility[severidade];
+        }
+      }
+
+      const valorBasemap = this._basemapAtual || 'padrao';
+      this._controleEl
+        .querySelectorAll(`input[name="${this._radioGroupName}"]`)
+        .forEach((input) => {
+          input.checked = input.value === valorBasemap;
+        });
+    }
+
+    _injetarEstilos() {
+      if (this._estilosInjetados || typeof document === 'undefined' || !document.head) {
+        return;
+      }
+      const style = document.createElement('style');
+      style.textContent = `
+        .inmet-camadas {
+          background: var(--card-background-color, #fff);
+          color: var(--primary-text-color, #212121);
+          padding: 8px 10px;
+          border-radius: 8px;
+          box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+          font-size: 12px;
+          line-height: 1.5;
+        }
+        .inmet-camadas-titulo { font-weight: 600; margin-bottom: 4px; }
+        .inmet-camadas-secao { font-weight: 600; margin: 6px 0 2px; opacity: 0.7; }
+        .inmet-camadas label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+        .inmet-camadas input { margin: 0; }
+        .inmet-cor { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+      `;
+      document.head.appendChild(style);
+      this._estilosInjetados = true;
+    }
+
+    // --- Limpeza ---
+
+    clearPolygons() {
+      try {
+        for (const severidade of SEVERIDADES) {
+          const grupo = this.severityLayerGroups?.[severidade];
+          if (!grupo) {
+            continue;
+          }
+          grupo.eachLayer?.((layer) => {
+            layer.closePopup?.();
+            layer.unbindTooltip?.();
+          });
+          grupo.clearLayers();
+          this._severityCounts[severidade] = 0;
+        }
+      } catch (error) {
+        Logger.error('[INMETPolygonsPlugin] Erro limpando polígonos:', error);
+      }
+    }
+
     destroy() {
       try {
-        console.log('🗑️ [INMET] Destruindo plugin...');
-        
-        // Limpar intervalos
         if (this.intervalId) {
           clearInterval(this.intervalId);
           this.intervalId = null;
-          console.log('⏰ [INMET] Intervalo de atualização removido');
         }
-        
-        // Limpar todos os polígonos
+
         this.clearPolygons();
-        
-        // Remover grupo de camadas do mapa
-        if (this.polygonLayerGroup && this.map) {
-          this.map.removeLayer(this.polygonLayerGroup);
-          console.log('📍 [INMET] LayerGroup removido do mapa');
+
+        for (const severidade of SEVERIDADES) {
+          const grupo = this.severityLayerGroups?.[severidade];
+          if (grupo && this._groupsOnMap[severidade]) {
+            this.map.removeLayer(grupo);
+            this._groupsOnMap[severidade] = false;
+          }
         }
-        
-        // Limpar referências
-        this.polygonLayerGroup = null;
-        this.map = null;
+
+        if (this._basemapLayer) {
+          this.map.removeLayer(this._basemapLayer);
+          this._basemapLayer = null;
+        }
+        this._restaurarCamadasBaseDoCartao();
+
+        if (this._layerControl) {
+          this.map.removeControl(this._layerControl);
+          this._layerControl = null;
+          this._controleEl = null;
+        }
+
         this._hassRef = null;
         this.hass = null;
-        
-        console.log('✅ [INMET] Plugin destruído com sucesso');
       } catch (error) {
-        console.error('❌ [INMET] Erro destruindo plugin:', error);
+        Logger.error('[INMETPolygonsPlugin] Erro destruindo plugin:', error);
       }
     }
   };
 }
-
-// Registrar o plugin no sistema ha-map-card
-if (typeof customElements !== 'undefined' && window.customCards) {
-  window.customCards = window.customCards || [];
-  window.customCards.push({
-    type: 'inmet-polygons-plugin',
-    name: 'INMET Polygons Plugin',
-    description: 'Plugin para exibir polígonos de alertas meteorológicos do INMET',
-    version: '1.0.0'
-  });
-}
-
-console.log('📦 INMET Polygons Plugin loaded successfully');

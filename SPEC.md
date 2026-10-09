@@ -2,11 +2,23 @@
 
 | Campo | Valor |
 |---|---|
-| Status | ✅ Implementada na v1.15.0 |
-| Data | 2026-10-07 |
+| Status | ✅ v1.15.0 implementada e publicada · 🚧 v1.16.0 em andamento (develop) |
+| Data | 2026-10-07 (v1.15.0) · 2026-10-09 (v1.16.0) |
 | Base normativa | [Home Assistant Integration Quality Scale — regras Bronze](https://developers.home-assistant.io/docs/core/integration-quality-scale/) (verificada via Context7 em 2026-10-07) |
 | Referências | Review pente-fino (sessão de 2026-10-07); skills do repo em `.agents/skills/` |
-| Versão alvo | 1.15.0 |
+| Versão alvo | 1.16.0 (somente `develop`; sem release até decisão do usuário) |
+
+---
+
+## 🚧 v1.16.0 (em andamento — develop)
+
+**Escopo**: camadas de mapa no plugin do ha-map-card + base do tier **Silver**.
+
+- **Plugin** (`www/plugin_inmet_polygons.js`): seleção de severidade (controle "Camadas INMET" + opção `severidades`), seleção de basemap keyless (Cartográfico/Satélite/Topográfico via controle + opção `basemap`), contagem de polígonos por camada; removidos o render duplo por ciclo e o debug hardcoded (RJ/MG/ES).
+- **Testes JS**: `tests/js/plugin_inmet_polygons.test.mjs` via `node --test` — 14 casos (severidade, basemap, roteamento, limpeza) + job no CI.
+- **Silver (base)**: `PARALLEL_UPDATES = 0`; `log-when-unavailable` no coordenador (+ testes); docs de parâmetros de configuração/instalação; `quality_scale.yaml` com a seção Silver.
+- **Bug real encontrado por teste novo**: feed vazio/namespace quebrava o parsing (`local-name()` não suportado pelo ElementTree) — corrigido com fallback namespace-agnóstico + regressão.
+- **Test-coverage (Silver, ≥95%)**: baseline **59%** na suíte combinada (era 36%); mock de `sys.modules` removido (guia oficial de review desaconselha). Próximo passo dedicado: coordinator (parsing/rate-limit/merge), entidades e `__init__`.
 
 ---
 

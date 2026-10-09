@@ -76,6 +76,7 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._alertas_persistentes: dict[str, dict[str, Any]] = {}
         self._pending_caps: list[dict[str, Any]] = []
         self._retry_count: dict[str, int] = {}
+        self._indisponivel_logado = False
         self._diagnostico: dict[str, Any] = {
             "ultimo_http_status": None,
             "rate_limit_hits": 0,
@@ -94,6 +95,18 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(minutes=update_interval),
             config_entry=config_entry,
         )
+
+    def _marcar_indisponivel(self, erro: Exception) -> None:
+        """Registra a indisponibilidade uma única vez (regra log-when-unavailable)."""
+        if not self._indisponivel_logado:
+            _LOGGER.warning("INMET indisponível: %s", erro)
+            self._indisponivel_logado = True
+
+    def _marcar_disponivel(self) -> None:
+        """Informa a volta do serviço uma única vez."""
+        if self._indisponivel_logado:
+            _LOGGER.info("INMET voltou a responder normalmente")
+            self._indisponivel_logado = False
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Buscar dados do INMET."""
@@ -144,6 +157,7 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # Durante rate limiting, manter alertas existentes via persistência
                 alertas_finais = await self._merge_alertas_com_persistencia(alerts, now)
                 self._diagnostico["pending_caps"] = len(self._pending_caps)
+                self._marcar_disponivel()
 
                 return {
                     "alerts": alertas_finais,
@@ -173,20 +187,21 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 raise UpdateFailed(f"XML inválido recebido do INMET: {e}") from e
 
-            # Buscar items do RSS (com diferentes caminhos)
+            # Buscar items do RSS (caminhos comuns + fallback namespace-agnóstico).
+            # Obs.: ElementTree não suporta local-name(); iterar como fallback.
             items: list[ET.Element] = []
-            item_paths = [
-                ".//item",
-                ".//entry",
-                "./channel/item",
-                './/*[local-name()="item"]',
-            ]
-
-            for path in item_paths:
+            for path in (".//item", ".//entry", "./channel/item"):
                 found_items = root.findall(path)
                 if found_items:
                     items = found_items
                     break
+            else:
+                items = [
+                    element
+                    for element in root.iter()
+                    if isinstance(element.tag, str)
+                    and element.tag.rsplit("}", 1)[-1] in ("item", "entry")
+                ]
 
             _LOGGER.debug("Processando %d alertas do RSS principal", len(items))
             self._diagnostico["total_alertas_api"] = len(items)
@@ -256,6 +271,7 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "CAPs pendentes para próxima tentativa: %d", len(self._pending_caps)
             )
             self._diagnostico["pending_caps"] = len(self._pending_caps)
+            self._marcar_disponivel()
 
             return {
                 "alerts": alertas_finais,
@@ -279,6 +295,7 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     [], dt_util.now()
                 )
                 self._diagnostico["pending_caps"] = len(self._pending_caps)
+                self._marcar_disponivel()
 
                 return {
                     "alerts": alertas_finais,
@@ -291,6 +308,7 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             self._diagnostico["ultimo_erro"] = str(e)[:200]
             self._diagnostico["ultimo_ciclo_com_erro"] = True
+            self._marcar_indisponivel(e)
             raise UpdateFailed(f"Erro ao atualizar dados: {e}") from e
 
     async def _process_pending_caps(

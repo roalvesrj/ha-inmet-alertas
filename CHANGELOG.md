@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.16.0 - 09/10/2026 (em desenvolvimento — develop)
+
+### 🗺️ Camadas de mapa (plugin ha-map-card)
+- **Seleção de severidade**: controle "Camadas INMET" no mapa (ligar/desligar Grande Perigo/Perigo/Perigo Potencial, com contagem de polígonos) + opção YAML `severidades`
+- **Seleção de mapa base sem API key**: Cartográfico (OSM), Satélite (Esri) e Topográfico (OpenTopoMap), via controle e opção `basemap`
+- Plugin limpo: removidos o render duplo por ciclo de atualização e o debug hardcoded (RJ/MG/ES); logs via Logger
+- Testes JS com `node --test` (`tests/js`, 14 casos) + job no CI
+
+### 🥈 Base para o tier Silver
+- `PARALLEL_UPDATES = 0` na plataforma sensor
+- `log-when-unavailable`: o coordenador registra indisponibilidade e recuperação **uma única vez** (+ testes)
+- Documentação de parâmetros de configuração/instalação e seção Silver no `quality_scale.yaml`
+- Testes: mock de `sys.modules` removido (guia oficial de review desaconselha); suíte única combinada com **59% de cobertura** (era 36%)
+
+### 🐛 Correções
+- Feed vazio ou com namespace não quebra mais o parsing do RSS (o caminho XPath `local-name()` não é suportado pelo ElementTree) — regressão coberta por teste
+
 ## v1.15.0 - 07/10/2026
 
 ### 🏆 Qualidade (Integration Quality Scale — Bronze)

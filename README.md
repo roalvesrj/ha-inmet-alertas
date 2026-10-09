@@ -103,6 +103,16 @@ As notificações persistentes criadas pela integração podem ser dispensadas n
    - **Notificações de Perigo**: Ativa notificações automáticas para alertas Perigo e Grande Perigo
    - **Intervalo de Atualização**: Tempo entre verificações (5-120 minutos)
 
+### 📋 Parâmetros de configuração
+
+| Parâmetro | Onde fica | Descrição | Padrão |
+|---|---|---|---|
+| `estado` | `data` (escolhido na criação; imutável) | Estado brasileiro monitorado | — (obrigatório) |
+| `notificacoes_perigo` | `options` (botão **Configurar**) | Notificações persistentes para alertas Perigo/Grande Perigo | `true` |
+| `update_interval` | `options` (botão **Configurar**) | Intervalo de verificação em minutos (5–120) | `45` |
+
+> A instalação não possui parâmetros próprios: é feita via HACS ou copiando a pasta (ver `docs/INSTALACAO.md`).
+
 ### 🌎 Configurando Múltiplos Estados
 
 Você pode configurar a integração para monitorar diferentes estados simultaneamente:
@@ -529,6 +539,21 @@ plugins:
       fillOpacity: 0.3
       strokeOpacity: 0.8
 ```
+
+### 🎛️ Seleção de camadas e mapa base
+
+O plugin traz um controle **"Camadas INMET"** no canto do mapa:
+
+- **Alertas**: liga/desliga cada severidade (Grande Perigo / Perigo / Perigo Potencial) com contagem de polígonos;
+- **Mapa base**: alterna entre **Cartográfico (OSM)**, **Satélite (Esri)** e **Topográfico (OpenTopoMap)** — tudo **sem API key** — ou mantém o mapa padrão do cartão.
+
+As mesmas escolhas podem ser fixadas via YAML:
+
+| Opção | Descrição | Padrão |
+|---|---|---|
+| `severidades` | Lista das severidades visíveis (ex.: `["Grande Perigo", "Perigo"]`) | todas |
+| `basemap` | `cartografico`, `satelite` ou `topografico` | mapa do cartão |
+| `showLayerControl` | Exibe o controle de camadas no mapa | `true` |
 
 O plugin está disponível automaticamente em `/hacsfiles/inmet_alertas/plugin_inmet_polygons.js` após a instalação via HACS.
 

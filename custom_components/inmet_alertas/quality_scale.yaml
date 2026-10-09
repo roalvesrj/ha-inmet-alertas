@@ -28,3 +28,22 @@ rules:
   test_before_configure: done
   test_before_setup: done
   unique_config_entry: done
+
+  # Silver (em andamento — v1.16.0)
+  action_exceptions: done
+  config_entry_unloading: done
+  docs_configuration_parameters: done
+  docs_installation_parameters: done
+  entity_unavailable: done
+  integration_owner: done
+  log_when_unavailable: done
+  parallel_updates: done
+  reauthentication_flow:
+    status: exempt
+    comment: Integração não usa autenticação (feed público do INMET).
+  test_coverage:
+    status: todo
+    comment: >-
+      Meta ≥95% (Silver). Baseline em 2026-10-09: 59% (suíte combinada, HA 2026.9.4).
+      Próximo passo dedicado: testes do coordinator (parsing/rate-limit/merge),
+      atributos das entidades e __init__.

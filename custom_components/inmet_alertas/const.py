@@ -4,7 +4,7 @@ from typing import Final
 # Informações da integração
 DOMAIN: Final = "inmet_alertas"
 NAME: Final = "INMET Alertas"
-VERSION: Final = "1.15.0"
+VERSION: Final = "1.16.0"
 MANUFACTURER: Final = "Instituto Nacional de Meteorologia"
 MODEL: Final = "Sistema de Alertas Meteorológicos"
 

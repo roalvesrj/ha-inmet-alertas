@@ -1,6 +1,6 @@
 # Plugin ha-map-card para INMET Alertas
 
-Este plugin permite visualizar polígonos de alertas meteorológicos do INMET em mapas usando o ha-map-card.
+Este plugin permite visualizar polígonos de alertas meteorológicos do INMET em mapas usando o ha-map-card, com **seleção de camadas** por severidade e de **mapa base** (sem API key).
 
 ## Instalação Automática
 
@@ -20,7 +20,32 @@ plugins:
     url: /hacsfiles/inmet_alertas/plugin_inmet_polygons.js  # URL automática
     options:
       states: ["rio_de_janeiro"]  # Seus estados
+      # severidades: ["Grande Perigo", "Perigo"]  # opcional (padrão: todas)
+      # basemap: satelite                          # opcional (padrão: mapa do cartão)
 ```
+
+## Controle "Camadas INMET" no mapa
+
+- **Alertas**: liga/desliga cada severidade (Grande Perigo / Perigo / Perigo Potencial) com contagem de polígonos;
+- **Mapa base**: Cartográfico (OSM), Satélite (Esri) e Topográfico (OpenTopoMap) — **sem API key** — ou o padrão do cartão.
+
+## Opções
+
+| Opção | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `states` | lista | `["rio_de_janeiro"]` | Estados monitorados (snake_case) |
+| `entityPrefix` | string | `sensor.inmet_alertas_mapa_` | Prefixo das entidades |
+| `updateInterval` | número | `60000` | Intervalo de atualização (ms) |
+| `showLabels` | bool | `true` | Tooltip por polígono |
+| `autoFocus` | bool | `true` | Centraliza o mapa na área com alertas |
+| `colors` | objeto | cores oficiais | `{ grandePerigo, perigo, perigoPotencial }` |
+| `fillOpacity` | número | `0.5` | Opacidade do preenchimento |
+| `strokeOpacity` | número | `0.8` | Opacidade da borda |
+| `strokeWeight` | número | `2` | Espessura da borda |
+| `severidades` | lista/string | todas | Severidades visíveis |
+| `basemap` | string | mapa do cartão | `cartografico`, `satelite` ou `topografico` |
+| `showLayerControl` | bool | `true` | Exibe o controle de camadas |
+| `basemaps` | objeto | — | Estende/sobrescreve definições de basemap |
 
 ## Dependências
 

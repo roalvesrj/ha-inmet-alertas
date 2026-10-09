@@ -6,7 +6,7 @@ on:
 
 jobs:
   tests:
-    name: Testes (unit + integração)
+    name: Testes (suíte completa)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,16 +17,28 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements_test.txt
-      - name: Testes unitários
-        env:
-          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: python -m pytest tests/unit -q
-      - name: Testes de integração + gate de cobertura do config flow (Bronze)
+      - name: Suíte completa + gate de cobertura do config flow (Bronze)
         run: >
-          python -m pytest tests/integration -q
+          python -m pytest tests -q
           --cov=custom_components.inmet_alertas.config_flow
           --cov-report=term-missing
           --cov-fail-under=100
+      - name: Cobertura geral do pacote (rumo ao Silver, meta 95%)
+        run: >
+          python -m pytest tests -q
+          --cov=custom_components.inmet_alertas
+          --cov-report=term-missing
+
+  frontend:
+    name: Testes JS (plugin do mapa)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Plugin INMET (node --test)
+        run: node --test "tests/js/*.test.mjs"
 
   validate:
     name: Hassfest + HACS

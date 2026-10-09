@@ -16,6 +16,9 @@ from .helpers.sensor_data import (
     preparar_alertas_para_atributos,
 )
 
+# Atualizações centralizadas no coordenador (regra parallel-updates do Silver)
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
