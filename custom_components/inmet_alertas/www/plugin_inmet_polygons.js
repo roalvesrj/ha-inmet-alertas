@@ -39,10 +39,9 @@ export const CORES_SEVERIDADE = {
 
 export const BASEMAPS = {
   cartografico: {
-    nome: 'Cartográfico (OSM)',
-    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    nome: 'Cartográfico (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
     maxZoom: 19,
   },
   satelite: {
@@ -52,12 +51,14 @@ export const BASEMAPS = {
     maxZoom: 19,
   },
   topografico: {
-    nome: 'Topográfico (OpenTopoMap)',
-    url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
-    maxZoom: 17,
+    nome: 'Topográfico (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 19,
   },
 };
+// Nota: tiles do OpenStreetMap (osm.wiki/Blocked) bloqueiam aplicativos;
+// os presets usam a Esri, que permite uso keyless com atribuição.
 
 /**
  * Normaliza a opção `severidades` em um mapa severidade → visível.
@@ -85,7 +86,43 @@ export function escaparHtml(valor) {
     .replaceAll("'", '&#39;');
 }
 
-let estilosInjetados = false;
+export const PRESETS_SEVERIDADE = {
+  todas: [...SEVERIDADES],
+  gp_perigo: ['Grande Perigo', 'Perigo'],
+  grande: ['Grande Perigo'],
+  perigo: ['Perigo'],
+  potencial: ['Perigo Potencial'],
+};
+
+const PRESET_ROTULOS = {
+  todas: 'Todas',
+  gp_perigo: 'Grande Perigo + Perigo',
+  grande: 'Só Grande Perigo',
+  perigo: 'Só Perigo',
+  potencial: 'Só Perigo Potencial',
+};
+
+/** Converte um preset em mapa severidade → visível. */
+export function presetParaVisibilidade(preset) {
+  const lista = PRESETS_SEVERIDADE[preset] || [];
+  return Object.fromEntries(
+    SEVERIDADES.map((severidade) => [severidade, lista.includes(severidade)]),
+  );
+}
+
+/** Descobre o preset correspondente (ou null quando a seleção é personalizada). */
+export function visibilidadeParaPreset(visibilidade) {
+  for (const [preset, lista] of Object.entries(PRESETS_SEVERIDADE)) {
+    if (
+      SEVERIDADES.every(
+        (severidade) => visibilidade[severidade] === lista.includes(severidade),
+      )
+    ) {
+      return preset;
+    }
+  }
+  return null;
+}
 
 export default function (L, pluginBase, Logger) {
   return class INMETPolygonsPlugin extends pluginBase {
@@ -150,7 +187,7 @@ export default function (L, pluginBase, Logger) {
       // Controle de camadas (criado sob demanda, quando há mapa/pronto)
       this._layerControl = null;
       this._controleEl = null;
-      this._radioGroupName = `inmet-basemap-${String(name || 'plugin').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+      this._controleExpandido = false;
       this._retryTimeoutId = null;
       this._unlockTimeoutId = null;
       this._destruido = false;
@@ -461,6 +498,18 @@ export default function (L, pluginBase, Logger) {
     }
 
     /**
+     * Define quais severidades ficam visíveis de uma vez (usado pelo seletor).
+     */
+    setSeveridades(severidades) {
+      const lista = Array.isArray(severidades) ? severidades : [severidades];
+      for (const severidade of SEVERIDADES) {
+        this.layerVisibility[severidade] = lista.includes(severidade);
+      }
+      this.aplicarVisibilidade();
+      this._atualizarControleValores();
+    }
+
+    /**
      * Aplica a visibilidade atual de todas as camadas ao mapa (idempotente).
      */
     aplicarVisibilidade() {
@@ -609,56 +658,148 @@ export default function (L, pluginBase, Logger) {
     }
 
     _montarControle() {
-      this._injetarEstilos();
-
       const el = document.createElement('div');
       el.className = 'inmet-camadas';
 
-      const linhasBasemap = [
-        `<label><input type="radio" name="${this._radioGroupName}" value="padrao"> Padrão do cartão</label>`,
-      ];
-      for (const [chave, definicao] of Object.entries(this.basemaps)) {
-        linhasBasemap.push(
-          `<label><input type="radio" name="${this._radioGroupName}" value="${escaparHtml(chave)}"> ${escaparHtml(definicao.nome)}</label>`,
-        );
-      }
+      const opcoesBasemap = [
+        '<option value="padrao">Padrão do cartão</option>',
+        ...Object.entries(this.basemaps).map(
+          ([chave, definicao]) =>
+            `<option value="${escaparHtml(chave)}">${escaparHtml(definicao.nome)}</option>`,
+        ),
+      ].join('');
 
-      const linhasSeveridade = SEVERIDADES.map(
-        (severidade) => `
-          <label>
-            <input type="checkbox" data-inmet-severidade="${severidade}">
-            <span class="inmet-cor" style="background: ${this.severityColors[severidade]};"></span>
-            ${severidade} (<span data-inmet-contagem="${severidade}">0</span>)
-          </label>`,
-      ).join('');
+      const opcoesSeveridade = [
+        `<option value="todas">${PRESET_ROTULOS.todas}</option>`,
+        `<option value="gp_perigo">${PRESET_ROTULOS.gp_perigo}</option>`,
+        `<option value="grande">${PRESET_ROTULOS.grande}</option>`,
+        `<option value="perigo">${PRESET_ROTULOS.perigo}</option>`,
+        `<option value="potencial">${PRESET_ROTULOS.potencial}</option>`,
+        '<option value="personalizado" disabled>Personalizado (YAML)</option>',
+      ].join('');
 
       el.innerHTML = `
-        <div class="inmet-camadas-titulo">Camadas INMET</div>
-        <div class="inmet-camadas-secao">Mapa base</div>
-        ${linhasBasemap.join('')}
-        <div class="inmet-camadas-secao">Alertas</div>
-        ${linhasSeveridade}
+        <style>
+          .inmet-camadas {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+          }
+          .inmet-camadas-botao {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            border: 0;
+            border-radius: 8px;
+            cursor: pointer;
+            background: var(--card-background-color, #fff);
+            color: var(--primary-text-color, #212121);
+            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+          }
+          .inmet-camadas-botao:hover {
+            background: var(--secondary-background-color, #f2f2f2);
+          }
+          .inmet-camadas-contagem {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            min-width: 15px;
+            height: 15px;
+            padding: 0 3px;
+            border-radius: 8px;
+            background: var(--primary-color, #03a9f4);
+            color: #fff;
+            font-size: 9px;
+            line-height: 15px;
+            text-align: center;
+          }
+          .inmet-camadas-painel {
+            display: none;
+            gap: 6px;
+            width: 180px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: var(--card-background-color, #fff);
+            color: var(--primary-text-color, #212121);
+            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+            font-size: 12px;
+            line-height: 1.5;
+          }
+          .inmet-camadas.aberto .inmet-camadas-painel { display: grid; }
+          .inmet-camadas-titulo { font-weight: 600; }
+          .inmet-camadas-linha { display: grid; gap: 2px; min-width: 0; }
+          .inmet-camadas-linha span { opacity: 0.7; }
+          .inmet-camadas select {
+            width: 100%;
+            box-sizing: border-box;
+            font: inherit;
+            color: inherit;
+            background: var(--card-background-color, #fff);
+            border: 1px solid var(--divider-color, #ccc);
+            border-radius: 4px;
+            padding: 2px 4px;
+          }
+        </style>
+        <button type="button" class="inmet-camadas-botao" title="Camadas INMET"
+                aria-label="Camadas INMET" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <path d="M12 2 1 8l11 6 11-6-11-6zm0 2.3L19.7 8 12 11.7 4.3 8 12 4.3zM1 12l11 6 11-6v2l-11 6L1 14v-2zm0 4 11 6 11-6v2l-11 6L1 20v-2z"/>
+          </svg>
+          <span class="inmet-camadas-contagem" hidden></span>
+        </button>
+        <div class="inmet-camadas-painel">
+          <div class="inmet-camadas-titulo">Camadas INMET</div>
+          <label class="inmet-camadas-linha">
+            <span>Mapa base</span>
+            <select data-inmet-basemap>${opcoesBasemap}</select>
+          </label>
+          <label class="inmet-camadas-linha">
+            <span>Alertas</span>
+            <select data-inmet-severidade>${opcoesSeveridade}</select>
+          </label>
+        </div>
       `;
 
-      el.querySelectorAll(`input[name="${this._radioGroupName}"]`).forEach((input) => {
-        input.addEventListener('change', (evento) => {
-          if (evento.target.checked) {
-            this.setBasemap(evento.target.value === 'padrao' ? null : evento.target.value);
-          }
-        });
+      el.querySelector('.inmet-camadas-botao')?.addEventListener('click', () => {
+        this._alternarControle();
       });
 
-      el.querySelectorAll('input[data-inmet-severidade]').forEach((input) => {
-        input.addEventListener('change', (evento) => {
-          this.setLayerVisibility(
-            evento.target.dataset.inmetSeveridade,
-            evento.target.checked,
-          );
-        });
+      const selectBasemap = el.querySelector('select[data-inmet-basemap]');
+      selectBasemap?.addEventListener('change', (evento) => {
+        const valor = evento.target.value;
+        this.setBasemap(valor === 'padrao' ? null : valor);
+      });
+
+      const selectSeveridade = el.querySelector('select[data-inmet-severidade]');
+      selectSeveridade?.addEventListener('change', (evento) => {
+        const preset = evento.target.value;
+        if (preset !== 'personalizado') {
+          this.setSeveridades(PRESETS_SEVERIDADE[preset] || []);
+        }
       });
 
       this._controleEl = el;
+      this._atualizarControleValores();
       return el;
+    }
+
+    _alternarControle() {
+      this._controleExpandido = !this._controleExpandido;
+      const el = this._controleEl;
+      if (!el) {
+        return;
+      }
+      el.classList.toggle('aberto', this._controleExpandido);
+      el.querySelector('.inmet-camadas-botao')?.setAttribute(
+        'aria-expanded',
+        String(this._controleExpandido),
+      );
+      this._atualizarControleValores();
     }
 
     _atualizarControleValores() {
@@ -666,52 +807,44 @@ export default function (L, pluginBase, Logger) {
         return;
       }
 
-      for (const severidade of SEVERIDADES) {
-        const contagem = this._controleEl.querySelector(
-          `[data-inmet-contagem="${severidade}"]`,
-        );
-        if (contagem) {
-          contagem.textContent = String(this._severityCounts[severidade] || 0);
-        }
-        const checkbox = this._controleEl.querySelector(
-          `input[data-inmet-severidade="${severidade}"]`,
-        );
-        if (checkbox) {
-          checkbox.checked = this.layerVisibility[severidade];
-        }
+      const total = SEVERIDADES.reduce(
+        (soma, severidade) => soma + (this._severityCounts[severidade] || 0),
+        0,
+      );
+
+      const contagem = this._controleEl.querySelector('.inmet-camadas-contagem');
+      if (contagem) {
+        contagem.textContent = String(total);
+        contagem.hidden = total === 0;
       }
 
-      const valorBasemap = this._basemapAtual || 'padrao';
-      this._controleEl
-        .querySelectorAll(`input[name="${this._radioGroupName}"]`)
-        .forEach((input) => {
-          input.checked = input.value === valorBasemap;
-        });
-    }
-
-    _injetarEstilos() {
-      if (estilosInjetados || typeof document === 'undefined' || !document.head) {
-        return;
+      const selectBasemap = this._controleEl.querySelector(
+        'select[data-inmet-basemap]',
+      );
+      if (selectBasemap) {
+        selectBasemap.value = this._basemapAtual || 'padrao';
       }
-      const style = document.createElement('style');
-      style.textContent = `
-        .inmet-camadas {
-          background: var(--card-background-color, #fff);
-          color: var(--primary-text-color, #212121);
-          padding: 8px 10px;
-          border-radius: 8px;
-          box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
-          font-size: 12px;
-          line-height: 1.5;
+
+      const selectSeveridade = this._controleEl.querySelector(
+        'select[data-inmet-severidade]',
+      );
+      if (selectSeveridade) {
+        selectSeveridade.value = visibilidadeParaPreset(this.layerVisibility) || 'personalizado';
+
+        for (const option of selectSeveridade.options) {
+          if (option.value === 'personalizado' || !PRESETS_SEVERIDADE[option.value]) {
+            continue;
+          }
+          const contagemPreset =
+            option.value === 'todas'
+              ? total
+              : PRESETS_SEVERIDADE[option.value].reduce(
+                  (soma, severidade) => soma + (this._severityCounts[severidade] || 0),
+                  0,
+                );
+          option.textContent = `${PRESET_ROTULOS[option.value]} (${contagemPreset})`;
         }
-        .inmet-camadas-titulo { font-weight: 600; margin-bottom: 4px; }
-        .inmet-camadas-secao { font-weight: 600; margin: 6px 0 2px; opacity: 0.7; }
-        .inmet-camadas label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-        .inmet-camadas input { margin: 0; }
-        .inmet-cor { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-      `;
-      document.head.appendChild(style);
-      estilosInjetados = true;
+      }
     }
 
     // --- Limpeza ---

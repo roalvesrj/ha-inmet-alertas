@@ -27,7 +27,9 @@ const {
   BASEMAPS,
   escaparHtml,
   normalizarSeveridades,
+  presetParaVisibilidade,
   SEVERIDADES,
+  visibilidadeParaPreset,
 } = await import(moduleUrl.href);
 
 class PluginBase {
@@ -251,11 +253,20 @@ test('clearPolygons limpa todos os grupos e zera contagens', () => {
 });
 
 test('BASEMAPS: opções keyless com url, atribuição e maxZoom', () => {
-  assert.ok(BASEMAPS.cartografico.url.includes('openstreetmap'));
-  assert.ok(BASEMAPS.satelite.url.includes('arcgisonline'));
-  assert.ok(BASEMAPS.topografico.url.includes('opentopomap'));
+  assert.ok(BASEMAPS.cartografico.url.includes('World_Street_Map'));
+  assert.ok(BASEMAPS.satelite.url.includes('World_Imagery'));
+  assert.ok(BASEMAPS.topografico.url.includes('World_Topo_Map'));
   for (const definicao of Object.values(BASEMAPS)) {
     assert.ok(definicao.nome && definicao.attribution && definicao.maxZoom);
+  }
+});
+
+test('BASEMAPS não usa tiles do OSM (apps são bloqueados pela política)', () => {
+  for (const definicao of Object.values(BASEMAPS)) {
+    assert.ok(
+      !definicao.url.includes('openstreetmap'),
+      `${definicao.nome} usa tiles do OSM (osm.wiki/Blocked)`,
+    );
   }
 });
 
@@ -345,4 +356,37 @@ test('destroy cancela o retry e marca a instância como destruída', async () =>
 
   assert.equal(plugin._retryTimeoutId, null);
   assert.equal(plugin._destruido, true);
+});
+
+test('presets de severidade: ida e volta', () => {
+  assert.deepEqual(presetParaVisibilidade('perigo'), {
+    'Grande Perigo': false,
+    'Perigo': true,
+    'Perigo Potencial': false,
+  });
+  assert.equal(visibilidadeParaPreset(presetParaVisibilidade('todas')), 'todas');
+  assert.equal(visibilidadeParaPreset(presetParaVisibilidade('gp_perigo')), 'gp_perigo');
+  assert.equal(visibilidadeParaPreset(presetParaVisibilidade('potencial')), 'potencial');
+  assert.equal(
+    visibilidadeParaPreset({
+      'Grande Perigo': true,
+      'Perigo': false,
+      'Perigo Potencial': true,
+    }),
+    null,
+    'combinação fora dos presets → personalizado',
+  );
+});
+
+test('setSeveridades aplica a visibilidade e as camadas no mapa', () => {
+  const { plugin, map } = criarInstancia();
+  plugin.aplicarVisibilidade(); // todas visíveis
+
+  plugin.setSeveridades(['Perigo']);
+
+  assert.equal(plugin.layerVisibility['Perigo'], true);
+  assert.equal(plugin.layerVisibility['Grande Perigo'], false);
+  assert.equal(plugin.layerVisibility['Perigo Potencial'], false);
+  assert.equal(map.temCamada(plugin.severityLayerGroups['Perigo']), true);
+  assert.equal(map.temCamada(plugin.severityLayerGroups['Grande Perigo']), false);
 });

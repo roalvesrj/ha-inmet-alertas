@@ -102,6 +102,8 @@ Conhecimento validado contra fontes oficiais e/ou testes; usar direto:
 - **Qualidade (foco)**: Bronze completo (config-flow 100%); o Silver exige `test-coverage` **>95% em todos os módulos** (sem exceções) — foco atual, **não bloqueante** na 1.16.0.
 - **Frontend (HTML)**: nunca interpolar dados externos (feed) direto em HTML — usar `escaparHtml` (popups/controle do plugin do mapa).
 - **Frontend (timers)**: rastrear e cancelar timers (retry/interval/unlock) no `destroy`, com flag `_destruido`.
+- **Frontend (shadow DOM)**: estilo injetado em `document.head` **não cruza** o shadow DOM dos cards — injetar `<style>` **dentro do próprio elemento** do controle (senão o CSS não se aplica).
+- **Mapas base**: tiles do OpenStreetMap bloqueiam aplicativos ("Access blocked", osm.wiki/Blocked) — presets keyless devem usar **Esri** (World_Street_Map / World_Imagery / World_Topo_Map) com atribuição.
 
 ## Não faça
 

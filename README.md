@@ -544,10 +544,10 @@ plugins:
 
 ### 🎛️ Seleção de camadas e mapa base
 
-O plugin traz um controle **"Camadas INMET"** no canto do mapa:
+No canto do mapa há um **botão de camadas** (com badge da quantidade de polígonos) que **expande ao ser clicado**, com **um seletor para cada grupo**:
 
-- **Alertas**: liga/desliga cada severidade (Grande Perigo / Perigo / Perigo Potencial) com contagem de polígonos;
-- **Mapa base**: alterna entre **Cartográfico (OSM)**, **Satélite (Esri)** e **Topográfico (OpenTopoMap)** — tudo **sem API key** — ou mantém o mapa padrão do cartão.
+- **Mapa base**: **Padrão do cartão**, **Cartográfico**, **Satélite** ou **Topográfico** — tiles da **Esri**, sem API key (os tiles do OpenStreetMap bloqueiam aplicativos — "Access blocked");
+- **Alertas**: **Todas**, **Grande Perigo + Perigo** ou **somente** uma severidade — cada opção mostra a **contagem de polígonos**. Seleções personalizadas continuam possíveis via YAML (`severidades`, exibidas como "Personalizado").
 
 As mesmas escolhas podem ser fixadas via YAML:
 

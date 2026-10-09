@@ -26,8 +26,10 @@ plugins:
 
 ## Controle "Camadas INMET" no mapa
 
-- **Alertas**: liga/desliga cada severidade (Grande Perigo / Perigo / Perigo Potencial) com contagem de polígonos;
-- **Mapa base**: Cartográfico (OSM), Satélite (Esri) e Topográfico (OpenTopoMap) — **sem API key** — ou o padrão do cartão.
+Um **botão de camadas** no canto do mapa (com badge da contagem de polígonos) que **expande ao clicar**, com **um seletor para cada grupo**:
+
+- **Mapa base**: Padrão do cartão, Cartográfico, Satélite e Topográfico — tiles da **Esri**, **sem API key**;
+- **Alertas**: Todas, Grande Perigo + Perigo ou somente uma severidade — com contagem de polígonos em cada opção.
 
 ## Opções
 

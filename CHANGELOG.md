@@ -19,6 +19,8 @@
 - Evento `inmet_alerta_expirado` agora é disparado de verdade na expiração de um alerta (estava documentado, mas nunca existiu) — coberto por teste
 - Serviço `atualizar_alertas` levanta `HomeAssistantError` quando a atualização falha (regra `action-exceptions`)
 - Plugin do mapa: HTML de popups/controle escapado (`escaparHtml`) — dados do feed não são mais interpolados crus; timers (retry/interval/unlock) cancelados no `destroy`; estilo injetado uma única vez por página
+- Controle de camadas redesenhado: **botão de camadas recolhível** (expande ao clicar, com badge de contagem) e um **seletor** para Mapa base e para Alertas (com contagens); estilo aplicado **dentro do card** (corrige a renderização sem CSS em shadow DOM)
+- Mapas base trocados para tiles da **Esri** (Cartográfico/Satélite/Topográfico, keyless com atribuição) — o OpenStreetMap bloqueia uso por aplicativos ("Access blocked", osm.wiki/Blocked)
 
 ## v1.15.0 - 07/10/2026
 
