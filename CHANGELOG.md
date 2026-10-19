@@ -1,12 +1,39 @@
 # Changelog
 
-## v1.16.0 - 09/10/2026 (em desenvolvimento — develop)
+## v2.0.0 - em desenvolvimento (develop)
+
+### 🌦️ Clima no mapa (radar e satélite)
+- Overlay de **radar de chuva** e de **nuvens por satélite** ([RainViewer](https://www.rainviewer.com/), keyless) selecionável no controle ("Clima")
+- Atualização automática a cada 5 min (frame mais recente), opacidade configurável e atribuição ao RainViewer no mapa
+- Opções YAML: `clima` (`radar` | `nuvens`) e `climaOpacidade` (0.1–1, padrão 0.6)
+- **Sem telefone oculto**: o polling só roda quando há overlay ativo — quem não usa o clima não gera requests periódicos; a verificação inicial é única
+- **Um fetch por dashboard**: cache compartilhado entre instâncias do plugin (vários cards = um request por janela), com guarda de requisição em voo
+- Opções indisponíveis ficam desabilitadas e rotuladas ("— indisponível"); falha de rede avisa uma única vez no console
+- Popup robusto: área/centro inválidos do feed não quebram mais o polígono
+
+### 🐛 Correções
+- Tooltip do polígono escapa o nome do estado (Leaflet insere string como HTML)
+- Overlay de clima não é mais capturado/removido pelo controle de mapa base a cada ciclo
+- Serviço `atualizar_alertas` usa `async_refresh()` — a falha real da atualização agora chega ao chamador como `HomeAssistantError`
+- Recuperação durante rate limiting tem mensagem própria ("voltou a responder (com rate limiting)") em vez de "normalmente"
+- Removido `calculate_summary` (código morto, duplicava `helpers/sensor_data.py`)
+
+### 🧪 Testes e CI
+- 14 novos testes JS: ciclo de vida completo do clima (fetch injetado, sucesso, `!ok`, rejeição, cache compartilhado, voo em andamento, timer no `destroy`, labels "— indisponível", robustez do popup)
+- 21 novos testes Python: migração (falha/no-op), `ConfigEntryNotReady` no setup, branch de rate limiting, evento de expiração (sem re-disparo, sem disparo em falha de merge), sensores com dados e sem dados, agregação de polígonos, `utils` de data e fuso ingênuo
+- Cobertura do pacote: **60% → 72%** (`persistence` 100%, `sensor` 96%, `geo_processor` 77%, `utils` 88%)
+- CI: `timeout-minutes` nos jobs e piso de regressão de cobertura (`--cov-fail-under=71`)
+
+### 📖 Documentação
+- README repaginado: alinhado à integração (entity_id correto do sensor de diagnóstico, mapa base Esri, sem promessas de "tempo real") e sem seções infladas
+
+## v1.16.0 - 19/10/2026
 
 ### 🗺️ Camadas de mapa (plugin ha-map-card)
 - **Seleção de severidade**: controle "Camadas INMET" no mapa (ligar/desligar Grande Perigo/Perigo/Perigo Potencial, com contagem de polígonos) + opção YAML `severidades`
-- **Seleção de mapa base sem API key**: Cartográfico (OSM), Satélite (Esri) e Topográfico (OpenTopoMap), via controle e opção `basemap`
+- **Seleção de mapa base sem API key**: Cartográfico, Satélite e Topográfico — tiles da **Esri** (keyless com atribuição), via controle e opção `basemap`
 - Plugin limpo: removidos o render duplo por ciclo de atualização e o debug hardcoded (RJ/MG/ES); logs via Logger
-- Testes JS com `node --test` (`tests/js`, 14 casos) + job no CI
+- Testes JS com `node --test` (`tests/js`, 20 casos) + job no CI
 
 ### 🥈 Base para o tier Silver
 - `PARALLEL_UPDATES = 0` na plataforma sensor
