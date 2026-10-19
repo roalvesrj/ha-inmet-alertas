@@ -14,8 +14,8 @@ python -m pytest tests -q
 # Gate do Bronze: config flow com 100% de cobertura (sobre a suíte completa)
 python -m pytest tests -q --cov=custom_components.inmet_alertas.config_flow --cov-report=term-missing --cov-fail-under=100
 
-# Cobertura geral do pacote (meta Silver: >= 95%)
-python -m pytest tests -q --cov=custom_components.inmet_alertas --cov-report=term-missing
+# Cobertura geral do pacote (CI falha abaixo de 71%; meta Silver: >= 95%)
+python -m pytest tests -q --cov=custom_components.inmet_alertas --cov-report=term-missing --cov-fail-under=71
 
 # Testes do plugin do mapa (Node; roda no Windows e Linux/CI)
 node --test "tests/js/*.test.mjs"
@@ -23,7 +23,7 @@ node --test "tests/js/*.test.mjs"
 # Checagem sintática rápida
 python -m compileall custom_components -q
 
-# Lint (ainda não é gate; limpeza massiva prevista no backlog)
+# Lint (não é gate do CI, mas o repo passa limpo — mantenha assim)
 python -m ruff check custom_components tests
 ```
 
@@ -31,7 +31,7 @@ python -m ruff check custom_components tests
 
 > Ambiente de teste validado: **HA 2026.9.4** + plugin `0.13.367` (Python 3.14 — ver `requirements_test.txt`).
 
-> CI (GitHub Actions): `checkout@v4`, `setup-python@v5` e `setup-node@v4` ainda em Node 20 (deprecado; forçado a Node 24). Atualizar as actions quando o warning virar erro.
+> CI (GitHub Actions): o job de JS fixa `node-version: "24"`; `checkout@v4`/`setup-python@v5`/`setup-node@v4` ainda geram aviso de deprecação do Node 20 (o runner força Node 24). Atualizar as actions quando o warning virar erro.
 
 ## Fluxo TDD (regra do projeto)
 
@@ -99,11 +99,14 @@ Conhecimento validado contra fontes oficiais e/ou testes; usar direto:
 - **Arquivos da integração**: localizar com `Path(__file__).parent` (ex.: pasta `www/`); `hass.config.path("custom_components", ...)` aponta para o testing_config nos testes e não encontra nada.
 - **Contrato do plugin de mapa**: o JS consome `camadas_por_severidade[*].poligonos` e `poligonos` do sensor de mapa — não remover/renomear sem atualizar `www/plugin_inmet_polygons.js`.
 - **Ruff**: `# noqa: BLE001` é intencional (o ruleset do HA habilita BLE001); TRY003/TRY301 não são seguidos neste repo.
-- **Qualidade (foco)**: Bronze completo (config-flow 100%); o Silver exige `test-coverage` **>95% em todos os módulos** (sem exceções) — foco atual, **não bloqueante** na 1.16.0.
+- **Qualidade (foco)**: Bronze completo (config-flow 100%); o Silver exige `test-coverage` **>95% em todos os módulos** (sem exceções) — foco atual, **não bloqueante** na 1.16.0. O CI tem piso de regressão em **71%** (`--cov-fail-under=71`).
 - **Frontend (HTML)**: nunca interpolar dados externos (feed) direto em HTML — usar `escaparHtml` (popups/controle do plugin do mapa).
 - **Frontend (timers)**: rastrear e cancelar timers (retry/interval/unlock) no `destroy`, com flag `_destruido`.
 - **Frontend (shadow DOM)**: estilo injetado em `document.head` **não cruza** o shadow DOM dos cards — injetar `<style>` **dentro do próprio elemento** do controle (senão o CSS não se aplica).
 - **Mapas base**: tiles do OpenStreetMap bloqueiam aplicativos ("Access blocked", osm.wiki/Blocked) — presets keyless devem usar **Esri** (World_Street_Map / World_Imagery / World_Topo_Map) com atribuição.
+- **Serviço que força atualização**: usar `await coordenador.async_refresh()` — `async_request_refresh()` é debounced/background e engole `UpdateFailed`, então o `HomeAssistantError` do `action-exceptions` nunca dispararia.
+- **Entity IDs**: o `entity_id` vem do `_attr_name` (ex.: "Diagnóstico INMET GO" → `sensor.diagnostico_inmet_go`), **não** do `unique_id` (`inmet_alertas_GO_diagnostico`) — conferir o nome antes de documentar entity_id em docs/testes.
+- **Clima no plugin (RainViewer)**: cache compartilhado em nível de módulo (um fetch por dashboard por janela de 5 min), `climaFetch` injetável via opção (seam dos testes), polling só quando há overlay ativo (`_climaAtual`) — sem `clima` configurado não existe request periódico; timer sempre limpo no `destroy`.
 
 ## Não faça
 
