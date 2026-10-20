@@ -107,6 +107,7 @@ Conhecimento validado contra fontes oficiais e/ou testes; usar direto:
 - **Serviço que força atualização**: usar `await coordenador.async_refresh()` — `async_request_refresh()` é debounced/background e engole `UpdateFailed`, então o `HomeAssistantError` do `action-exceptions` nunca dispararia.
 - **Entity IDs**: o `entity_id` vem do `_attr_name` (ex.: "Diagnóstico INMET GO" → `sensor.diagnostico_inmet_go`), **não** do `unique_id` (`inmet_alertas_GO_diagnostico`) — conferir o nome antes de documentar entity_id em docs/testes.
 - **Clima no plugin (RainViewer)**: cache compartilhado em nível de módulo (um fetch por dashboard por janela de 5 min), `climaFetch` injetável via opção (seam dos testes), polling só quando há overlay ativo (`_climaAtual`) — sem `clima` configurado não existe request periódico; timer sempre limpo no `destroy`.
+- **Rota estática de assets**: **nunca** registrar caminhos sob `/hacsfiles/` — esse prefixo pertence ao HACS (que serve repositórios de frontend por ali). Use o namespace da integração: `StaticPathConfig(f"/{DOMAIN}", ...)` → ex.: `/inmet_alertas/plugin_inmet_polygons.js`; mantenha README, `www/README.md` e log com a mesma URL.
 
 ## Não faça
 
