@@ -108,6 +108,7 @@ Conhecimento validado contra fontes oficiais e/ou testes; usar direto:
 - **Entity IDs**: o `entity_id` vem do `_attr_name` (ex.: "Diagnóstico INMET GO" → `sensor.diagnostico_inmet_go`), **não** do `unique_id` (`inmet_alertas_GO_diagnostico`) — conferir o nome antes de documentar entity_id em docs/testes.
 - **Clima no plugin (RainViewer)**: cache compartilhado em nível de módulo (um fetch por dashboard por janela de 5 min), `climaFetch` injetável via opção (seam dos testes), polling só quando há overlay ativo (`_climaAtual`) — sem `clima` configurado não existe request periódico; timer sempre limpo no `destroy`.
 - **Rota estática de assets**: **nunca** registrar caminhos sob `/hacsfiles/` — esse prefixo pertence ao HACS (que serve repositórios de frontend por ali). Use o namespace da integração: `StaticPathConfig(f"/{DOMAIN}", ...)` → ex.: `/inmet_alertas/plugin_inmet_polygons.js`; mantenha README, `www/README.md` e log com a mesma URL.
+- **Acesso a filesystem em async**: em código `async`, nunca chamar `Path.is_dir()`/`exists()`/`read_text()`/`write_text()` diretamente — envolver em `await hass.async_add_executor_job(...)` (ou usar as APIs async do HA) para não bloquear o event loop. No plugin de mapa: `await hass.async_add_executor_job(plugin_path.is_dir)`. (Evidência: review do HACS na v1.16.1.)
 
 ## Não faça
 
