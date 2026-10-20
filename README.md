@@ -3,9 +3,10 @@
 <img src="custom_components/inmet_alertas/brand/logo.png" alt="INMET" width="320"/>
 
 [![GitHub release](https://img.shields.io/github/release/roalvesrj/ha-inmet-alertas.svg)](https://github.com/roalvesrj/ha-inmet-alertas/releases)
+[![Downloads](https://img.shields.io/github/downloads/roalvesrj/ha-inmet-alertas/total.svg)](https://github.com/roalvesrj/ha-inmet-alertas/releases)
 [![GitHub issues](https://img.shields.io/github/issues/roalvesrj/ha-inmet-alertas.svg)](https://github.com/roalvesrj/ha-inmet-alertas/issues)
 [![License](https://img.shields.io/github/license/roalvesrj/ha-inmet-alertas.svg)](LICENSE)
-[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
+[![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://hacs.xyz)
 [![CI](https://github.com/roalvesrj/ha-inmet-alertas/actions/workflows/ci.yml/badge.svg)](https://github.com/roalvesrj/ha-inmet-alertas/actions/workflows/ci.yml)
 
 Integração que acompanha os alertas meteorológicos do INMET (feed público) e expõe sensores, notificações, eventos e um mapa com os polígonos dos alertas.
