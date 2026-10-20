@@ -17,7 +17,7 @@ y: -47.8645  # Coordenada obrigatória
 
 plugins:
   - name: inmet_polygons
-    url: /hacsfiles/inmet_alertas/plugin_inmet_polygons.js  # URL automática
+    url: /inmet_alertas/plugin_inmet_polygons.js  # URL servida pela integração
     options:
       states: ["rio_de_janeiro"]  # Seus estados
       # severidades: ["Grande Perigo", "Perigo"]  # opcional (padrão: todas)
@@ -29,7 +29,7 @@ plugins:
 Um **botão de camadas** no canto do mapa (com badge da contagem de polígonos) que **expande ao clicar**, com **um seletor para cada grupo**:
 
 - **Mapa base**: Padrão do cartão, Cartográfico, Satélite e Topográfico — tiles da **Esri**, **sem API key**;
-- **Alertas**: Todas, Grande Perigo + Perigo ou somente uma severidade — com contagem de polígonos em cada opção.
+- **Alertas**: Todas, Grande Perigo + Perigo ou somente uma severidade — com contagem de polígonos em cada opção;
 
 ## Opções
 

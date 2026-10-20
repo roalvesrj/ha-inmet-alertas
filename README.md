@@ -25,9 +25,10 @@ Integração que acompanha os alertas meteorológicos do INMET (feed público) e
 
 [![Abrir no Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?category=integration&repository=roalvesrj%2Fha-inmet-alertas)
 
-1. HACS → **Integrações** → **⋮** → **Repositórios Personalizados**
-2. Adicione `https://github.com/roalvesrj/ha-inmet-alertas` (categoria **Integração**)
-3. Instale **"INMET Alertas"** e **reinicie o Home Assistant**
+1. **HACS** → **Integrações** → busque por **"INMET Alertas"**
+2. **Instalar** e **reinicie o Home Assistant**
+
+Se a integração ainda não aparecer na busca (HACS antigo ou antes de entrar na loja padrão), use o repositório personalizado: **HACS** → **Integrações** → **⋮** → **Repositórios Personalizados** → adicione `https://github.com/roalvesrj/ha-inmet-alertas` (categoria **Integração**) → instale **"INMET Alertas"** → reinicie.
 
 Instalação manual e detalhes: [`docs/INSTALACAO.md`](custom_components/inmet_alertas/docs/INSTALACAO.md).
 
@@ -97,7 +98,7 @@ x: -15.7998
 y: -47.8645
 plugins:
   - name: inmet_polygons
-    url: /hacsfiles/inmet_alertas/plugin_inmet_polygons.js
+    url: /inmet_alertas/plugin_inmet_polygons.js
     options:
       states: ["rio_de_janeiro"] # estados em snake_case
 ```

@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.16.1 - 20/10/2026
+
+### 🐛 Correções
+- Rota estática do plugin movida para o namespace da integração: **`/inmet_alertas/plugin_inmet_polygons.js`** (antes `/hacsfiles/inmet_alertas/...`) — o prefixo `/hacsfiles/` pertence ao HACS e não deve ser usado por integrações (review do HACS). **Atualize a URL do plugin no card do ha-map-card.**
+- README: a instalação agora lidera pela busca no HACS, com repositório personalizado como alternativa.
+
+### 📖 Documentação
+- `www/README.md` alinhado à integração (sem a seção de clima, ainda não lançada) e com a nova URL do plugin.
+
 ## v2.0.0 - em desenvolvimento (develop)
 
 ### 🌦️ Clima no mapa (radar e satélite)

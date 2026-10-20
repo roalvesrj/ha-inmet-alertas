@@ -73,7 +73,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def _async_registrar_recurso_estatico(hass: HomeAssistant) -> None:
-    """Registra /hacsfiles/<domain> → www/ para o plugin de mapa."""
+    """Registra /<domain> → www/ para o plugin de mapa."""
     if hass.http is None:
         _LOGGER.debug("HTTP indisponível; plugin de mapa não será servido")
         return
@@ -89,14 +89,14 @@ async def _async_registrar_recurso_estatico(hass: HomeAssistant) -> None:
 
     try:
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(f"/hacsfiles/{DOMAIN}", str(plugin_path), False)]
+            [StaticPathConfig(f"/{DOMAIN}", str(plugin_path), False)]
         )
     except RuntimeError:
         # Rota já registrada (ex.: outro reload no mesmo processo)
         _LOGGER.debug("Recurso estático já registrado para %s", DOMAIN)
     else:
         _LOGGER.info(
-            "✅ Plugin INMET disponível em: /hacsfiles/%s/plugin_inmet_polygons.js",
+            "✅ Plugin INMET disponível em: /%s/plugin_inmet_polygons.js",
             DOMAIN,
         )
 
