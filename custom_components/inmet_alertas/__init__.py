@@ -83,7 +83,7 @@ async def _async_registrar_recurso_estatico(hass: HomeAssistant) -> None:
 
     # Caminho relativo ao próprio módulo (robusto p/ qualquer diretório de config)
     plugin_path = Path(__file__).parent / "www"
-    if not plugin_path.is_dir():
+    if not await hass.async_add_executor_job(plugin_path.is_dir):
         _LOGGER.warning("Pasta do plugin não encontrada: %s", plugin_path)
         return
 
