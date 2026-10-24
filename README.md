@@ -1,11 +1,11 @@
 # INMET Alertas — Integração Home Assistant
 
-<img src="custom_components/inmet_alertas/brand/logo.png" alt="INMET" width="320"/>
+<img src="https://raw.githubusercontent.com/roalvesrj/ha-inmet-alertas/main/custom_components/inmet_alertas/brand/logo.png" alt="INMET" width="320"/>
 
 [![GitHub release](https://img.shields.io/github/release/roalvesrj/ha-inmet-alertas.svg)](https://github.com/roalvesrj/ha-inmet-alertas/releases)
 [![Downloads](https://img.shields.io/github/downloads/roalvesrj/ha-inmet-alertas/total.svg)](https://github.com/roalvesrj/ha-inmet-alertas/releases)
 [![GitHub issues](https://img.shields.io/github/issues/roalvesrj/ha-inmet-alertas.svg)](https://github.com/roalvesrj/ha-inmet-alertas/issues)
-[![License](https://img.shields.io/github/license/roalvesrj/ha-inmet-alertas.svg)](LICENSE)
+[![License](https://img.shields.io/github/license/roalvesrj/ha-inmet-alertas.svg)](https://github.com/roalvesrj/ha-inmet-alertas/blob/main/LICENSE)
 [![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://hacs.xyz)
 [![CI](https://github.com/roalvesrj/ha-inmet-alertas/actions/workflows/ci.yml/badge.svg)](https://github.com/roalvesrj/ha-inmet-alertas/actions/workflows/ci.yml)
 
@@ -31,7 +31,7 @@ Integração que acompanha os alertas meteorológicos do INMET (feed público) e
 
 Se a integração ainda não aparecer na busca (HACS antigo ou antes de entrar na loja padrão), use o repositório personalizado: **HACS** → **Integrações** → **⋮** → **Repositórios Personalizados** → adicione `https://github.com/roalvesrj/ha-inmet-alertas` (categoria **Integração**) → instale **"INMET Alertas"** → reinicie.
 
-Instalação manual e detalhes: [`docs/INSTALACAO.md`](custom_components/inmet_alertas/docs/INSTALACAO.md).
+Instalação manual e detalhes: [`docs/INSTALACAO.md`](https://github.com/roalvesrj/ha-inmet-alertas/blob/main/custom_components/inmet_alertas/docs/INSTALACAO.md).
 
 ## ⚙️ Configuração
 
@@ -47,7 +47,7 @@ Instalação manual e detalhes: [`docs/INSTALACAO.md`](custom_components/inmet_a
 
 Para monitorar outro estado, repita a instalação: cada configuração tem sensores e notificações independentes.
 
-Guia completo: [`docs/CONFIGURACAO.md`](custom_components/inmet_alertas/docs/CONFIGURACAO.md).
+Guia completo: [`docs/CONFIGURACAO.md`](https://github.com/roalvesrj/ha-inmet-alertas/blob/main/custom_components/inmet_alertas/docs/CONFIGURACAO.md).
 
 ## 📊 Sensores
 
@@ -123,7 +123,7 @@ Opções do plugin:
 | `fillOpacity` / `strokeOpacity` / `strokeWeight` | Estilo dos polígonos | `0.5` / `0.8` / `2` |
 | `updateInterval` | Intervalo de atualização do plugin (ms) | `60000` |
 
-Documentação do plugin: [`www/README.md`](custom_components/inmet_alertas/www/README.md).
+Documentação do plugin: [`www/README.md`](https://github.com/roalvesrj/ha-inmet-alertas/blob/main/custom_components/inmet_alertas/www/README.md).
 
 > Sem alertas ativos não há polígonos no mapa.
 
@@ -150,7 +150,7 @@ action:
 mode: single
 ```
 
-Mais exemplos: [`examples/automations.md`](custom_components/inmet_alertas/examples/automations.md).
+Mais exemplos: [`examples/automations.md`](https://github.com/roalvesrj/ha-inmet-alertas/blob/main/custom_components/inmet_alertas/examples/automations.md).
 
 ## 🖥️ Cartões Lovelace
 
@@ -191,7 +191,7 @@ logger:
 
 ## 📈 Versionamento
 
-[Versionamento semântico](https://semver.org/). Histórico completo: [CHANGELOG.md](CHANGELOG.md).
+[Versionamento semântico](https://semver.org/). Histórico completo: [CHANGELOG.md](https://github.com/roalvesrj/ha-inmet-alertas/blob/main/CHANGELOG.md).
 
 **v1.16.0** — seleção de camadas no mapa (severidades + mapa base Esri sem API key), base do tier Silver (`log-when-unavailable`, `PARALLEL_UPDATES`), correções no parsing do feed e no evento `inmet_alerta_expirado`.
 
@@ -199,7 +199,7 @@ logger:
 
 ## 📄 Licença
 
-MIT — veja [LICENSE](LICENSE).
+MIT — veja [LICENSE](https://github.com/roalvesrj/ha-inmet-alertas/blob/main/LICENSE).
 
 ## ⚠️ Disclaimer
 

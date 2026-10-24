@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.16.2 - 24/10/2026
+
+### 🐛 Correções
+- README: imagens e links em **URLs absolutas** — o logo volta a aparecer na página de detalhes do HACS (caminho relativo não resolvia no renderizador do HACS).
+- Plugin do mapa: `plugin_path.is_dir()` agora roda em `async_add_executor_job` — acesso a filesystem fora do event loop (review do HACS).
+
+### 📖 Documentação
+- README: badge de **downloads** (soma dos zips dos releases) e badge **HACS Default** (substitui "Custom"); links de docs/CHANGELOG/LICENSE absolutos.
+- AGENTS: novas regras — rota estática sempre no namespace da integração (`/{DOMAIN}`, nunca `/hacsfiles/`) e acesso a filesystem em async via executor.
+
+> Nota: o ícone na **lista do HACS 2.0.5** usa um caminho legado de brands e exibe um placeholder (limitação do HACS). O ícone está publicado em `brands.home-assistant.io/marketplace/inmet_alertas/` e será usado pelo novo Marketplace do Home Assistant.
+
 ## v1.16.1 - 20/10/2026
 
 ### 🐛 Correções
