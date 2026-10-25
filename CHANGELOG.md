@@ -54,6 +54,7 @@
 - Visual inspirado no [weather_alerts_card](https://github.com/seevee/weather_alerts_card) (MIT), adaptado ao atributo `alertas` dos nossos sensores — sem dependências e sem build
 - Feed fora do ar mostra "Dados do INMET indisponíveis" (nunca "nenhum alerta")
 - 10 testes novos (`node --test`) para filtro, datas, progresso, resumo de municípios e configuração
+- **Paginação** (`paginacao`/`itensPorPagina`) para grandes volumes de alertas e **descrição resumida** em até 3 linhas (texto completo em "Ler detalhes")
 
 ## v1.16.0 - 19/10/2026
 

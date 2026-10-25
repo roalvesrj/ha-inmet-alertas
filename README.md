@@ -157,12 +157,16 @@ titulo: Alertas de Grande Perigo
 | `severidade` | `Perigo`, `Grande Perigo`, `Perigo Potencial` ou `todas` | `todas` |
 | `titulo` | Título exibido acima dos alertas | — |
 | `maxAlertas` | Máximo de alertas exibidos | `5` |
+| `paginacao` | Mostra um alerta por vez, com navegação (‹ 1 de N ›) | `false` |
+| `itensPorPagina` | Alertas por página quando `paginacao: true` | `1` |
 | `mostrarVazio` | Mostra "nenhum alerta" em vez de ocultar o card | `false` |
 | `mostrarDetalhes` | Seção expansível com descrição/instruções/fonte | `true` |
 | `mostrarProgresso` | Barra de progresso do período do alerta | `true` |
 | `mostrarMunicipios` | Linha com os municípios afetados | `true` |
 
 O card mostra "Dados do INMET indisponíveis" (em vez de "nenhum alerta") quando o sensor está `unavailable` — um feed fora do ar nunca é tratado como ausência de alertas.
+
+A descrição aparece resumida em até 3 linhas (corte em palavra inteira, com “…"); o texto completo, as instruções e os municípios ficam em **Ler detalhes**. Com muitos alertas, use `paginacao: true` para exibir um por vez com navegação.
 
 ## 🤖 Automações
 

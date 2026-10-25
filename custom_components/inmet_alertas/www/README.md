@@ -70,7 +70,9 @@ severidade: Grande Perigo
 titulo: Alertas de Grande Perigo
 ```
 
-Opções: `estado` (ou `entidade`), `severidade` (`Perigo`, `Grande Perigo`, `Perigo Potencial`, `todas`), `titulo`, `maxAlertas` (5), `mostrarVazio` (false), `mostrarDetalhes` (true), `mostrarProgresso` (true), `mostrarMunicipios` (true).
+Opções: `estado` (ou `entidade`), `severidade` (`Perigo`, `Grande Perigo`, `Perigo Potencial`, `todas`), `titulo`, `maxAlertas` (5), `paginacao` (false), `itensPorPagina` (1), `mostrarVazio` (false), `mostrarDetalhes` (true), `mostrarProgresso` (true), `mostrarMunicipios` (true).
+
+Com vários alertas, `paginacao: true` mostra um por vez com navegação (‹ 1 de N ›). A descrição é resumida em até 3 linhas; o texto completo fica em **Ler detalhes**.
 
 Visual inspirado no [weather_alerts_card](https://github.com/seevee/weather_alerts_card) (MIT), adaptado ao formato de dados da integração.
 

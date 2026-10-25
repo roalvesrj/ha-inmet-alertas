@@ -166,6 +166,34 @@ export function resumirMunicipios(alertas, limite = 3) {
   return `${lista.slice(0, limite).join(', ')} e mais ${lista.length - limite}`;
 }
 
+/** Resumo da descrição, cortado em palavra inteira e com reticências. */
+export function resumirDescricao(texto, limite = 220) {
+  const limpo = String(texto ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (limpo.length <= limite) {
+    return limpo;
+  }
+  const corte = limpo.lastIndexOf(' ', limite);
+  const base = corte > limite * 0.6 ? limpo.slice(0, corte) : limpo.slice(0, limite);
+  return `${base.trimEnd()}…`;
+}
+
+/** Fatia a lista de alertas em uma página (com limites normalizados). */
+export function paginarAlertas(alertas, pagina = 0, porPagina = 1) {
+  const lista = Array.isArray(alertas) ? alertas : [];
+  const tamanho = Math.max(1, Math.floor(Number(porPagina) || 1));
+  const totalPaginas = Math.max(1, Math.ceil(lista.length / tamanho));
+  const indicePedido = Math.floor(Number(pagina) || 0);
+  const atual = Math.min(Math.max(0, indicePedido), totalPaginas - 1);
+  return {
+    itens: lista.slice(atual * tamanho, atual * tamanho + tamanho),
+    pagina: atual,
+    totalPaginas,
+    total: lista.length,
+  };
+}
+
 /** Aplica padrões e valida a configuração do card. */
 export function normalizarConfig(config = {}) {
   const entidade =
@@ -177,11 +205,17 @@ export function normalizarConfig(config = {}) {
     );
   }
   const maxAlertas = Number(config.maxAlertas);
+  const itensPorPagina = Number(config.itensPorPagina);
   return {
     entidade,
     severidade: normalizarSeveridade(config.severidade),
     titulo: String(config.titulo ?? '').trim(),
     maxAlertas: Number.isFinite(maxAlertas) && maxAlertas > 0 ? maxAlertas : 5,
+    paginacao: config.paginacao === true,
+    itensPorPagina:
+      Number.isFinite(itensPorPagina) && itensPorPagina > 0
+        ? Math.floor(itensPorPagina)
+        : 1,
     mostrarVazio: config.mostrarVazio === true,
     mostrarMunicipios: config.mostrarMunicipios !== false,
     mostrarDetalhes: config.mostrarDetalhes !== false,
@@ -226,8 +260,10 @@ const ESTILOS = `
     font-size: 14px;
     line-height: 1.4;
     color: var(--secondary-text-color, #727272);
-    text-transform: uppercase;
-    letter-spacing: .02em;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   .local {
     display: flex;
@@ -331,6 +367,32 @@ const ESTILOS = `
     border-left-color: var(--warning-color, #ff9800);
   }
   .aviso .inmet-alerta { color: var(--secondary-text-color, #727272); }
+  .paginacao {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border-top: 1px solid var(--divider-color, rgba(0,0,0,.12));
+    font-size: 12px;
+    color: var(--secondary-text-color, #727272);
+  }
+  .paginacao button {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--primary-text-color, #212121);
+  }
+  .paginacao button:hover {
+    background: var(--secondary-background-color, rgba(0,0,0,.06));
+  }
+  .paginacao ha-icon { --mdc-icon-size: 20px; }
 `;
 
 const Base = typeof HTMLElement === 'undefined' ? class {} : HTMLElement;
@@ -341,17 +403,33 @@ export class InmetAlertCard extends Base {
     this._config = null;
     this._hass = null;
     this._intervalId = null;
+    this._pagina = 0;
+    this._totalPaginas = 1;
     this._root = this.attachShadow
       ? this.attachShadow({ mode: 'open' })
       : null;
+    // Delegação: o innerHTML é recriado a cada render.
+    this._root?.addEventListener('click', (evento) => this._aoClicar(evento));
   }
 
   static getStubConfig() {
-    return { estado: 'RJ', severidade: 'Perigo' };
+    return { estado: 'RJ', severidade: 'Perigo', paginacao: true };
   }
 
   setConfig(config) {
     this._config = normalizarConfig(config);
+    this._pagina = 0;
+    this._render();
+  }
+
+  _aoClicar(evento) {
+    const botao = evento.target?.closest?.('[data-pagina]');
+    if (!botao) {
+      return;
+    }
+    const delta = botao.dataset.pagina === 'proxima' ? 1 : -1;
+    const total = Math.max(1, this._totalPaginas);
+    this._pagina = (this._pagina + delta + total) % total;
     this._render();
   }
 
@@ -431,11 +509,40 @@ export class InmetAlertCard extends Base {
     }
 
     const agora = Date.now();
-    const blocos = alertas.map((alerta) => this._renderAlerta(alerta, agora));
     const titulo = this._config.titulo
       ? `<div class="titulo-card">${this._escapar(this._config.titulo)}</div>`
       : '';
-    this._root.innerHTML = this._moldura(titulo + blocos.join(''));
+
+    if (!this._config.paginacao) {
+      this._totalPaginas = 1;
+      const blocos = alertas.map((alerta) => this._renderAlerta(alerta, agora));
+      this._root.innerHTML = this._moldura(titulo + blocos.join(''));
+      return;
+    }
+
+    const pagina = paginarAlertas(
+      alertas,
+      this._pagina,
+      this._config.itensPorPagina,
+    );
+    this._pagina = pagina.pagina;
+    this._totalPaginas = pagina.totalPaginas;
+
+    const blocos = pagina.itens.map((alerta) => this._renderAlerta(alerta, agora));
+    const navegacao =
+      pagina.totalPaginas > 1
+        ? `<div class="paginacao">
+             <button type="button" data-pagina="anterior" aria-label="Alerta anterior">
+               <ha-icon icon="mdi:chevron-left"></ha-icon>
+             </button>
+             <span>${pagina.pagina + 1} de ${pagina.totalPaginas}</span>
+             <button type="button" data-pagina="proxima" aria-label="Próximo alerta">
+               <ha-icon icon="mdi:chevron-right"></ha-icon>
+             </button>
+           </div>`
+        : '';
+
+    this._root.innerHTML = this._moldura(titulo + blocos.join('') + navegacao);
   }
 
   _moldura(conteudo, { aviso = false } = {}) {
@@ -449,7 +556,9 @@ export class InmetAlertCard extends Base {
     const titulo = this._escapar(alerta?.titulo || alerta?.evento || 'Alerta INMET');
     const evento = this._escapar(alerta?.evento || '');
     const descricao = this._escapar(alerta?.descricao || '');
-    const curta = descricao ? descricao.slice(0, 140) : '';
+    const curta = this._escapar(
+      resumirDescricao(alerta?.descricao || '', 220),
+    );
     const local = this._local(alerta);
     const inicio = formatarDataHora(alerta?.onset) || alerta?.inicio || '';
     const fim = formatarDataHora(alerta?.expires) || alerta?.fim || '';

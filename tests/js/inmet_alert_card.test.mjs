@@ -23,8 +23,10 @@ const {
   normalizarConfig,
   normalizarSeveridade,
   normalizarSigla,
+  paginarAlertas,
   paraTimestamp,
   progressoAlerta,
+  resumirDescricao,
   resumirMunicipios,
 } = await import(moduleUrl.href);
 
@@ -125,6 +127,8 @@ test('normaliza a configuração do card', () => {
   assert.equal(padrao.entidade, 'sensor.alertas_meteorologicos_rj');
   assert.equal(padrao.severidade, 'todas');
   assert.equal(padrao.maxAlertas, 5);
+  assert.equal(padrao.paginacao, false);
+  assert.equal(padrao.itensPorPagina, 1);
   assert.equal(padrao.mostrarDetalhes, true);
   assert.equal(padrao.mostrarProgresso, true);
   assert.equal(padrao.mostrarVazio, false);
@@ -133,14 +137,54 @@ test('normaliza a configuração do card', () => {
     entidade: 'sensor.custom',
     severidade: 'Grande Perigo',
     maxAlertas: 2,
+    paginacao: true,
+    itensPorPagina: 2,
     mostrarVazio: true,
     titulo: 'Grande Perigo',
   });
   assert.equal(custom.entidade, 'sensor.custom');
   assert.equal(custom.severidade, 'Grande Perigo');
   assert.equal(custom.maxAlertas, 2);
+  assert.equal(custom.paginacao, true);
+  assert.equal(custom.itensPorPagina, 2);
   assert.equal(custom.mostrarVazio, true);
   assert.equal(custom.titulo, 'Grande Perigo');
 
   assert.throws(() => normalizarConfig({}), /informe "estado"/);
+});
+
+test('resume a descrição em palavra inteira com reticências', () => {
+  const texto =
+    'Chuva entre 30 e 60 mm/h ou 50 e 100 mm/dia, ventos intensos (60-100 km/h), e queda de granizo.';
+  const curto = resumirDescricao(texto, 60);
+  assert.ok(curto.endsWith('…'));
+  assert.ok(!curto.slice(0, -1).endsWith(' '));
+  assert.ok(!/\s…$/.test(curto));
+  // Não corta no meio da palavra
+  const ultima = curto.slice(0, -1);
+  assert.ok(texto.startsWith(ultima), 'deve ser um prefixo do original');
+  assert.ok(texto[ultima.length] === ' ', 'corte em fronteira de palavra');
+
+  assert.equal(resumirDescricao('Curto', 60), 'Curto');
+  assert.equal(resumirDescricao('', 60), '');
+  assert.equal(resumirDescricao('a  b\n c', 60), 'a b c');
+});
+
+test('pagina alertas com limites normalizados', () => {
+  const lista = Array.from({ length: 5 }, (_, i) => ({ id: i }));
+
+  const p1 = paginarAlertas(lista, 0, 2);
+  assert.deepEqual(p1.itens.map((a) => a.id), [0, 1]);
+  assert.equal(p1.pagina, 0);
+  assert.equal(p1.totalPaginas, 3);
+
+  const p2 = paginarAlertas(lista, 2, 2);
+  assert.deepEqual(p2.itens.map((a) => a.id), [4]);
+  assert.equal(p2.pagina, 2);
+
+  // Página fora do intervalo é limitada
+  assert.equal(paginarAlertas(lista, 99, 2).pagina, 2);
+  assert.equal(paginarAlertas(lista, -5, 2).pagina, 0);
+  assert.equal(paginarAlertas([], 0, 1).totalPaginas, 1);
+  assert.deepEqual(paginarAlertas(null, 0, 1).itens, []);
 });
