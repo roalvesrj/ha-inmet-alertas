@@ -8,6 +8,9 @@
  *   `basemap` e via controle no mapa — inspirado no `map_style` do card do
  *   Flightradar24.
  *
+ * - Clima (radar de chuva / nuvens por satélite, RainViewer keyless) via opção
+ *   `clima` e via controle no mapa, com atribuição ao RainViewer.
+ *
  * Opções (todas opcionais):
  *   states            array de estados em snake_case (padrão: ['rio_de_janeiro'])
  *   entityPrefix      prefixo das entidades (padrão: 'sensor.inmet_alertas_mapa_')
@@ -23,11 +26,28 @@
  *                     (padrão: mantém o mapa base do cartão)
  *   showLayerControl  exibe o controle de camadas (padrão: true)
  *   basemaps          estende/sobrescreve as definições de basemap
+ *   clima             'radar' | 'nuvens' (padrão: nenhuma camada de clima)
+ *   climaOpacidade    opacidade do overlay de clima, entre 0.1 e 1 (padrão: 0.6)
+ *   climaFetch        função de busca injetável (testes/avançado; padrão: fetch)
  *
  * @param L Leaflet library
  * @param pluginBase Base plugin class
  * @param Logger Logger utility
  */
+
+/**
+ * Versão do plugin — exibida no console, no título do botão de camadas e no
+ * painel. Manter em sincronia com `manifest.json` e `const.VERSION`.
+ */
+export const VERSAO_PLUGIN = '2.0.0';
+
+if (
+  typeof document !== 'undefined' &&
+  typeof console !== 'undefined' &&
+  typeof console.info === 'function'
+) {
+  console.info(`[INMET Alertas] Plugin do mapa v${VERSAO_PLUGIN} carregado`);
+}
 
 export const SEVERIDADES = ['Grande Perigo', 'Perigo', 'Perigo Potencial'];
 
@@ -124,6 +144,98 @@ export function visibilidadeParaPreset(visibilidade) {
   return null;
 }
 
+export const CLIMA_API_URL = 'https://api.rainviewer.com/public/weather-maps.json';
+export const CLIMA_ATUALIZACAO_MS = 5 * 60 * 1000;
+
+export const CLIMAS = ['radar', 'nuvens'];
+
+const ATRIBUICAO_RAINVIEWER =
+  '<a href="https://www.rainviewer.com/">RainViewer</a>';
+const CLIMA_ATRIBUICOES = {
+  radar: `Radar: ${ATRIBUICAO_RAINVIEWER}`,
+  nuvens: `Satélite: ${ATRIBUICAO_RAINVIEWER}`,
+};
+
+/** Normaliza a opção `clima` ('radar' | 'nuvens' | 'nenhuma'/null). */
+export function normalizarClima(valor) {
+  if (valor === undefined || valor === null || valor === 'nenhuma') {
+    return null;
+  }
+  return CLIMAS.includes(valor) ? valor : null;
+}
+
+/** Normaliza a opacidade do clima (0.1–1, padrão 0.6). */
+export function normalizarOpacidade(valor, padrao = 0.6) {
+  const numero = Number(valor);
+  if (!Number.isFinite(numero)) {
+    return padrao;
+  }
+  return Math.min(1, Math.max(0.1, numero));
+}
+
+/**
+ * Extrai os templates de tiles do JSON do RainViewer (frame mais recente).
+ * Retorna { radar, nuvens } com o template ou null quando indisponível.
+ */
+export function extrairCamadasClima(dados) {
+  const host = typeof dados?.host === 'string' ? dados.host : '';
+  const caminhoValido = (caminho) =>
+    typeof caminho === 'string' && caminho.startsWith('/') ? caminho : null;
+  const ultimo = (lista) =>
+    Array.isArray(lista) && lista.length ? lista[lista.length - 1] : null;
+
+  if (!host.startsWith('https://')) {
+    return { radar: null, nuvens: null };
+  }
+
+  const radarPath = caminhoValido(ultimo(dados?.radar?.past)?.path);
+  const nuvensPath = caminhoValido(ultimo(dados?.satellite?.infrared)?.path);
+
+  return {
+    radar: radarPath ? `${host}${radarPath}/256/{z}/{x}/{y}/2/1_1.png` : null,
+    nuvens: nuvensPath ? `${host}${nuvensPath}/256/{z}/{x}/{y}/0/0_0.png` : null,
+  };
+}
+
+/**
+ * Cache compartilhado entre instâncias do plugin: um único fetch por janela
+ * de atualização, mesmo com vários cards de mapa na mesma dashboard.
+ */
+const climaCompartilhado = {
+  urls: null,
+  ts: 0,
+  emVoo: false,
+  falhaLogada: false,
+  ouvintes: new Set(),
+};
+
+/** Reinicia o cache compartilhado do clima (usado pelos testes). */
+export function reiniciarClimaCompartilhado() {
+  climaCompartilhado.urls = null;
+  climaCompartilhado.ts = 0;
+  climaCompartilhado.emVoo = false;
+  climaCompartilhado.falhaLogada = false;
+  climaCompartilhado.ouvintes.clear();
+}
+
+/** Formata a área em km² com segurança (o feed pode mandar valores inválidos). */
+export function formatarArea(valor) {
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? `${numero.toFixed(1)} km²` : 'N/A';
+}
+
+/** Formata o centro geográfico com segurança (null quando inválido). */
+export function formatarCentro(centro) {
+  if (!Array.isArray(centro) || centro.length < 2) {
+    return null;
+  }
+  const [lat, lon] = centro.map(Number);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return null;
+  }
+  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+}
+
 export default function (L, pluginBase, Logger) {
   return class INMETPolygonsPlugin extends pluginBase {
     constructor(map, name, options = {}) {
@@ -184,6 +296,17 @@ export default function (L, pluginBase, Logger) {
       this._basemapLayer = null;
       this._camadasBaseDoCartao = null;
 
+      // Clima (overlay do RainViewer: radar de chuva / nuvens por satélite)
+      this._climaOpacidade = normalizarOpacidade(options.climaOpacidade);
+      this.climaFetch =
+        typeof options.climaFetch === 'function' ? options.climaFetch : null;
+      this._climaAtual = normalizarClima(options.clima);
+      this._climaUrls = { radar: null, nuvens: null };
+      this._climaLayer = null;
+      this._climaLayerUrl = null;
+      this._climaTipoAtivo = null;
+      this._climaIntervalId = null;
+
       // Controle de camadas (criado sob demanda, quando há mapa/pronto)
       this._layerControl = null;
       this._controleEl = null;
@@ -202,6 +325,7 @@ export default function (L, pluginBase, Logger) {
     }
 
     async init() {
+      this._iniciarClima();
       this.waitForHomeAssistant();
     }
 
@@ -404,7 +528,7 @@ export default function (L, pluginBase, Logger) {
           );
 
           if (this.showLabels) {
-            leafletPolygon.bindTooltip(`${severity} - ${estadoNome}`, {
+            leafletPolygon.bindTooltip(`${severity} - ${escaparHtml(estadoNome)}`, {
               permanent: false,
               direction: 'center',
               className: 'inmet-polygon-tooltip',
@@ -445,11 +569,14 @@ export default function (L, pluginBase, Logger) {
           <div style="font-size: 13px; line-height: 1.4;">
             <p style="margin: 5px 0;"><strong>Estado:</strong> ${estadoFormatado} (${escaparHtml(estadoSigla.toUpperCase())})</p>
             <p style="margin: 5px 0;"><strong>Evento:</strong> ${escaparHtml(polygon.evento || 'Alerta Meteorológico')}</p>
-            <p style="margin: 5px 0;"><strong>Área:</strong> ${polygon.area_km2?.toFixed(1) || 'N/A'} km²</p>
+            <p style="margin: 5px 0;"><strong>Área:</strong> ${formatarArea(polygon.area_km2)}</p>
       `;
 
-      if (polygon.centro && Array.isArray(polygon.centro) && polygon.centro.length >= 2) {
-        content += `<p style="margin: 5px 0;"><strong>Centro:</strong> ${polygon.centro[0].toFixed(4)}, ${polygon.centro[1].toFixed(4)}</p>`;
+      const centroFormatado = polygon.centro
+        ? formatarCentro(polygon.centro)
+        : null;
+      if (centroFormatado) {
+        content += `<p style="margin: 5px 0;"><strong>Centro:</strong> ${centroFormatado}</p>`;
       }
 
       if (polygon.inicio && polygon.fim) {
@@ -578,6 +705,7 @@ export default function (L, pluginBase, Logger) {
         if (
           layer instanceof L.TileLayer &&
           layer !== this._basemapLayer &&
+          layer !== this._climaLayer &&
           !this._camadasBaseDoCartao.includes(layer)
         ) {
           this._camadasBaseDoCartao.push(layer);
@@ -594,6 +722,175 @@ export default function (L, pluginBase, Logger) {
         this.map.addLayer(layer);
       }
       this._camadasBaseDoCartao = null;
+    }
+
+    // --- Clima (RainViewer: radar de chuva / nuvens por satélite) ---
+
+    /**
+     * Assina as atualizações de clima e faz uma verificação inicial.
+     * O polling só é ligado quando há overlay ativo — quem não usa o
+     * recurso não gera requests periódicos ao RainViewer.
+     */
+    _iniciarClima() {
+      if (this._destruido) {
+        return;
+      }
+      climaCompartilhado.ouvintes.add(this);
+      this._atualizarClima();
+      this._iniciarPollClima();
+    }
+
+    /** Liga o polling de clima (somente com overlay ativo). */
+    _iniciarPollClima() {
+      if (this._destruido || this._climaIntervalId || !this._climaAtual) {
+        return;
+      }
+      this._climaIntervalId = setInterval(
+        () => this._atualizarClima(),
+        CLIMA_ATUALIZACAO_MS,
+      );
+    }
+
+    /** Desliga o polling de clima. */
+    _pararPollClima() {
+      if (this._climaIntervalId) {
+        clearInterval(this._climaIntervalId);
+        this._climaIntervalId = null;
+      }
+    }
+
+    async _atualizarClima() {
+      if (this._destruido) {
+        return;
+      }
+      const buscar =
+        this.climaFetch ||
+        (typeof fetch === 'function' ? (...args) => fetch(...args) : null);
+      if (!buscar) {
+        return;
+      }
+
+      // Cache fresco (compartilhado entre cards): reaproveita sem rede.
+      const agora = Date.now();
+      if (
+        climaCompartilhado.urls &&
+        agora - climaCompartilhado.ts < CLIMA_ATUALIZACAO_MS
+      ) {
+        this._aplicarUrlsClima(climaCompartilhado.urls);
+        return;
+      }
+
+      // Outra instância já está buscando: ela notifica todos os ouvintes.
+      if (climaCompartilhado.emVoo) {
+        return;
+      }
+      climaCompartilhado.emVoo = true;
+
+      try {
+        const resposta = await buscar(CLIMA_API_URL);
+        if (!resposta.ok) {
+          throw new Error(`HTTP ${resposta.status}`);
+        }
+        const dados = await resposta.json();
+        climaCompartilhado.urls = extrairCamadasClima(dados);
+        climaCompartilhado.ts = Date.now();
+        climaCompartilhado.falhaLogada = false;
+        const alvos = new Set([...climaCompartilhado.ouvintes, this]);
+        for (const alvo of alvos) {
+          alvo._aplicarUrlsClima(climaCompartilhado.urls);
+        }
+      } catch (erro) {
+        if (!climaCompartilhado.falhaLogada) {
+          climaCompartilhado.falhaLogada = true;
+          Logger.debug('[INMETPolygonsPlugin] Clima indisponível:', erro);
+          if (
+            typeof console !== 'undefined' &&
+            typeof console.warn === 'function'
+          ) {
+            console.warn(
+              '[INMET Alertas] Camadas de clima indisponíveis (RainViewer):',
+              erro,
+            );
+          }
+        }
+        // mantém as URLs anteriores, se houver
+      } finally {
+        climaCompartilhado.emVoo = false;
+      }
+    }
+
+    /** Aplica as URLs do cache compartilhado nesta instância. */
+    _aplicarUrlsClima(urls) {
+      if (this._destruido) {
+        return;
+      }
+      this._climaUrls = urls;
+      this._aplicarClima();
+      this._atualizarControleValores();
+    }
+
+    /**
+     * Seleciona a camada de clima (null/'nenhuma' remove o overlay).
+     * Ligar um overlay inicia o polling; desligar, encerra.
+     */
+    setClima(id) {
+      this._climaAtual = normalizarClima(id);
+      if (this._climaAtual) {
+        climaCompartilhado.ouvintes.add(this);
+        this._iniciarPollClima();
+        this._atualizarClima();
+      } else {
+        this._pararPollClima();
+      }
+      this._aplicarClima();
+      this._atualizarControleValores();
+    }
+
+    _aplicarClima() {
+      if (!this.map || this._destruido) {
+        return;
+      }
+
+      const tipo = this._climaAtual;
+      const url = tipo ? this._climaUrls[tipo] : null;
+
+      if (!tipo || !url) {
+        this._removerClimaLayer();
+        return;
+      }
+
+      if (this._climaLayer && this._climaTipoAtivo === tipo) {
+        if (this._climaLayerUrl !== url) {
+          this._climaLayer.setUrl(url, false);
+          this._climaLayerUrl = url;
+        }
+        this._climaLayer.setOpacity(this._climaOpacidade);
+        if (!this.map.hasLayer(this._climaLayer)) {
+          this.map.addLayer(this._climaLayer);
+        }
+        return;
+      }
+
+      this._removerClimaLayer();
+      this._climaLayer = L.tileLayer(url, {
+        opacity: this._climaOpacidade,
+        attribution: CLIMA_ATRIBUICOES[tipo],
+        zIndex: 2,
+        maxNativeZoom: 12,
+        maxZoom: 19,
+      });
+      this._climaLayerUrl = url;
+      this._climaTipoAtivo = tipo;
+      this.map.addLayer(this._climaLayer);
+    }
+
+    _removerClimaLayer() {
+      if (this._climaLayer && this.map) {
+        this.map.removeLayer(this._climaLayer);
+      }
+      this._climaLayer = null;
+      this._climaLayerUrl = null;
+      this._climaTipoAtivo = null;
     }
 
     _autoFocusMap() {
@@ -732,6 +1029,7 @@ export default function (L, pluginBase, Logger) {
           }
           .inmet-camadas.aberto .inmet-camadas-painel { display: grid; }
           .inmet-camadas-titulo { font-weight: 600; }
+          .inmet-camadas-versao { opacity: 0.55; font-weight: 400; }
           .inmet-camadas-linha { display: grid; gap: 2px; min-width: 0; }
           .inmet-camadas-linha span { opacity: 0.7; }
           .inmet-camadas select {
@@ -745,7 +1043,7 @@ export default function (L, pluginBase, Logger) {
             padding: 2px 4px;
           }
         </style>
-        <button type="button" class="inmet-camadas-botao" title="Camadas INMET"
+        <button type="button" class="inmet-camadas-botao" title="Camadas INMET (v${VERSAO_PLUGIN})"
                 aria-label="Camadas INMET" aria-expanded="false">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
             <path d="M12 2 1 8l11 6 11-6-11-6zm0 2.3L19.7 8 12 11.7 4.3 8 12 4.3zM1 12l11 6 11-6v2l-11 6L1 14v-2zm0 4 11 6 11-6v2l-11 6L1 20v-2z"/>
@@ -753,7 +1051,7 @@ export default function (L, pluginBase, Logger) {
           <span class="inmet-camadas-contagem" hidden></span>
         </button>
         <div class="inmet-camadas-painel">
-          <div class="inmet-camadas-titulo">Camadas INMET</div>
+          <div class="inmet-camadas-titulo">Camadas INMET <span class="inmet-camadas-versao">v${VERSAO_PLUGIN}</span></div>
           <label class="inmet-camadas-linha">
             <span>Mapa base</span>
             <select data-inmet-basemap>${opcoesBasemap}</select>
@@ -761,6 +1059,14 @@ export default function (L, pluginBase, Logger) {
           <label class="inmet-camadas-linha">
             <span>Alertas</span>
             <select data-inmet-severidade>${opcoesSeveridade}</select>
+          </label>
+          <label class="inmet-camadas-linha">
+            <span>Clima</span>
+            <select data-inmet-clima>
+              <option value="nenhuma">Nenhuma</option>
+              <option value="radar">Chuva (radar)</option>
+              <option value="nuvens">Nuvens (satélite)</option>
+            </select>
           </label>
         </div>
       `;
@@ -781,6 +1087,12 @@ export default function (L, pluginBase, Logger) {
         if (preset !== 'personalizado') {
           this.setSeveridades(PRESETS_SEVERIDADE[preset] || []);
         }
+      });
+
+      const selectClima = el.querySelector('select[data-inmet-clima]');
+      selectClima?.addEventListener('change', (evento) => {
+        const valor = evento.target.value;
+        this.setClima(valor === 'nenhuma' ? null : valor);
       });
 
       this._controleEl = el;
@@ -845,6 +1157,27 @@ export default function (L, pluginBase, Logger) {
           option.textContent = `${PRESET_ROTULOS[option.value]} (${contagemPreset})`;
         }
       }
+
+      const selectClima = this._controleEl.querySelector('select[data-inmet-clima]');
+      if (selectClima) {
+        selectClima.value = this._climaAtual || 'nenhuma';
+
+        const rotulosClima = {
+          radar: 'Chuva (radar)',
+          nuvens: 'Nuvens (satélite)',
+        };
+        for (const tipo of CLIMAS) {
+          const opcao = selectClima.querySelector(`option[value="${tipo}"]`);
+          if (!opcao) {
+            continue;
+          }
+          const disponivel = Boolean(this._climaUrls[tipo]);
+          opcao.disabled = !disponivel;
+          opcao.textContent = disponivel
+            ? rotulosClima[tipo]
+            : `${rotulosClima[tipo]} — indisponível`;
+        }
+      }
     }
 
     // --- Limpeza ---
@@ -885,6 +1218,8 @@ export default function (L, pluginBase, Logger) {
           clearInterval(this.intervalId);
           this.intervalId = null;
         }
+        climaCompartilhado.ouvintes.delete(this);
+        this._pararPollClima();
 
         this.clearPolygons();
 
@@ -900,6 +1235,7 @@ export default function (L, pluginBase, Logger) {
           this.map.removeLayer(this._basemapLayer);
           this._basemapLayer = null;
         }
+        this._removerClimaLayer();
         this._restaurarCamadasBaseDoCartao();
 
         if (this._layerControl) {

@@ -17,6 +17,7 @@ from custom_components.inmet_alertas.const import (
     CONF_UPDATE_INTERVAL,
     DOMAIN,
     SERVICE_ATUALIZAR_ALERTAS,
+    URL_RSS,
 )
 
 
@@ -111,7 +112,7 @@ async def test_servico_atualizar_alertas_valida_estado(hass):
 
     with patch(
         "custom_components.inmet_alertas.coordinator."
-        "INMETDataUpdateCoordinator.async_request_refresh",
+        "INMETDataUpdateCoordinator.async_refresh",
         new_callable=AsyncMock,
     ) as mock_refresh:
         await hass.services.async_call(
@@ -182,7 +183,7 @@ async def test_servico_erro_interno_levanta_home_assistant_error(hass):
 
     with patch.object(
         type(entry.runtime_data),
-        "async_request_refresh",
+        "async_refresh",
         new_callable=AsyncMock,
         side_effect=RuntimeError("boom"),
     ):
@@ -190,3 +191,48 @@ async def test_servico_erro_interno_levanta_home_assistant_error(hass):
             await hass.services.async_call(
                 DOMAIN, SERVICE_ATUALIZAR_ALERTAS, {}, blocking=True
             )
+
+
+async def test_migracao_entry_corrompida_retorna_false(hass):
+    """Entry v1 sem 'estado' → migração aborta (False); o HA reconfigura."""
+    entry = MockConfigEntry(domain=DOMAIN, version=1, data={}, options={})
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is False
+    assert entry.version == 1
+
+
+async def test_migracao_entry_ja_v2_nao_altera_dados(hass):
+    """Entry já na versão 2 → migração é no-op e preserva data/options."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        unique_id=f"{DOMAIN}_SP",
+        data={CONF_ESTADO: "SP"},
+        options={CONF_UPDATE_INTERVAL: 30},
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is True
+    assert entry.data == {CONF_ESTADO: "SP"}
+    assert entry.options == {CONF_UPDATE_INTERVAL: 30}
+    assert entry.version == 2
+
+
+async def test_setup_falha_no_feed_gera_setup_retry(hass, aioclient_mock):
+    """test-before-setup: feed fora do ar → ConfigEntryNotReady + retry do HA."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        unique_id=f"{DOMAIN}_GO",
+        data={CONF_ESTADO: "GO"},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    aioclient_mock.get(URL_RSS, status=500)
+
+    assert await hass.config_entries.async_setup(entry.entry_id) is False
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_RETRY

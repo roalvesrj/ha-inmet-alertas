@@ -4,7 +4,7 @@ from typing import Dict, List, Any
 import logging
 
 from homeassistant.util import dt as dt_util
-from .const import MICRORREGIOES_ESTADOS, SEVERIDADE_PRIORIDADES
+from .const import MICRORREGIOES_ESTADOS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -104,36 +104,4 @@ def filter_state_municipalities(municipios_text: str, estado: str) -> List[str]:
     
     return resultado
 
-
-def calculate_summary(alerts: List[Dict[str, Any]], estado: str) -> Dict[str, Any]:
-    """Calcular resumo dos alertas ativos."""
-    if not alerts:
-        return {
-            "total_alertas": 0,
-            "alertas_ativos": 0,
-            "severidade_maxima": None,
-            "municipios_unicos": 0,
-            "estado": estado,
-        }
-
-    severidade_maxima = None
-    max_prioridade = 0
-    municipios_set = set()
-
-    for alert in alerts:
-        sev = alert.get('severidade', '')
-        prioridade = SEVERIDADE_PRIORIDADES.get(sev, 0)
-        if prioridade > max_prioridade:
-            max_prioridade = prioridade
-            severidade_maxima = sev
-
-        for municipio in alert.get('municipios_estado', []):
-            municipios_set.add(municipio)
-
-    return {
-        "total_alertas": len(alerts),
-        "alertas_ativos": len(alerts),
-        "severidade_maxima": severidade_maxima,
-        "municipios_unicos": len(municipios_set),
-        "estado": estado,
-    }
+    return resultado

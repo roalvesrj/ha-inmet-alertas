@@ -54,7 +54,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
         for coordenador in coordenadores:
             try:
-                await coordenador.async_request_refresh()
+                await coordenador.async_refresh()
             except Exception as err:  # noqa: BLE001 — falha de execução vira HA error
                 raise HomeAssistantError(
                     f"Falha ao atualizar os alertas do INMET: {err}"

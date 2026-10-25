@@ -107,7 +107,8 @@ plugins:
 No canto do mapa há um **botão de camadas** (com a contagem de polígonos) que expande ao ser clicado, com um seletor para cada grupo:
 
 - **Alertas**: Todas, Grande Perigo + Perigo ou apenas uma severidade — cada opção mostra a contagem de polígonos. Seleções personalizadas via YAML (`severidades`) aparecem como "Personalizado";
-- **Mapa base**: Padrão do cartão, **Cartográfico**, **Satélite** ou **Topográfico** — tiles da **Esri**, sem API key (os tiles do OpenStreetMap bloqueiam aplicativos).
+- **Mapa base**: Padrão do cartão, **Cartográfico**, **Satélite** ou **Topográfico** — tiles da **Esri**, sem API key (os tiles do OpenStreetMap bloqueiam aplicativos);
+- **Clima**: **Nenhuma**, **Chuva (radar)** ou **Nuvens (satélite)** — overlay keyless do [RainViewer](https://www.rainviewer.com/), atualizado a cada 5 min (o polling só roda com um overlay ativo).
 
 Opções do plugin:
 
@@ -116,6 +117,8 @@ Opções do plugin:
 | `states` | Estados monitorados (snake_case) | `["rio_de_janeiro"]` |
 | `severidades` | Severidades visíveis | todas |
 | `basemap` | `cartografico`, `satelite` ou `topografico` | mapa do cartão |
+| `clima` | `radar` ou `nuvens` (overlay do RainViewer) | nenhuma |
+| `climaOpacidade` | Opacidade do overlay de clima (0.1–1) | `0.6` |
 | `showLayerControl` | Exibe o controle de camadas | `true` |
 | `showLabels` | Tooltip por polígono | `true` |
 | `autoFocus` | Centraliza o mapa na área com alertas | `true` |
@@ -192,6 +195,8 @@ logger:
 ## 📈 Versionamento
 
 [Versionamento semântico](https://semver.org/). Histórico completo: [CHANGELOG.md](https://github.com/roalvesrj/ha-inmet-alertas/blob/main/CHANGELOG.md).
+
+**v2.0.0** — clima no mapa (radar de chuva e nuvens por satélite via RainViewer, com cache compartilhado e polling só quando ativo), tooltip/popup endurecidos, serviço com `async_refresh` e suíte ampliada (86 testes pytest + 42 node, cobertura 72%).
 
 **v1.16.0** — seleção de camadas no mapa (severidades + mapa base Esri sem API key), base do tier Silver (`log-when-unavailable`, `PARALLEL_UPDATES`), correções no parsing do feed e no evento `inmet_alerta_expirado`.
 

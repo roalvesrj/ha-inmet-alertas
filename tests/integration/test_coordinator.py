@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from unittest.mock import patch
 
 import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -115,3 +116,79 @@ async def test_evento_alerta_expirado_e_disparado(hass, aioclient_mock):
     assert eventos[0].data["alert_id"] == "A1"
     assert eventos[0].data["severidade"] == "Perigo"
     assert eventos[0].data["municipios"] == 1
+
+
+async def test_rate_limiting_mantem_alertas_e_conta_hits(hass, aioclient_mock):
+    """RSS com corpo de rate limit: não é erro; alertas mantidos e hits contados."""
+    coordenador = _criar_coordenador(hass)
+    coordenador._alertas_persistentes = {
+        "A1": {
+            "id": "A1",
+            "titulo": "Chuvas Intensas",
+            "expires": "2099-10-01T18:00:00-03:00",  # ainda válido
+        }
+    }
+
+    aioclient_mock.get(
+        URL_RSS, text="limite de requisições excedido, tente novamente mais tarde"
+    )
+
+    dados = await coordenador._async_update_data()
+
+    assert dados["rate_limited"] is True
+    assert dados["count"] == 1
+    assert coordenador._diagnostico["rate_limit_hits"] == 1
+    assert coordenador._diagnostico["ultimo_ciclo_rate_limited"] is True
+    assert coordenador._indisponivel_logado is False
+
+
+async def test_evento_expirado_nao_repetira_no_ciclo_seguinte(hass, aioclient_mock):
+    """Alerta expirado não gera novo evento no ciclo seguinte."""
+    eventos = []
+    hass.bus.async_listen(EVENT_ALERTA_EXPIRADO, eventos.append)
+
+    coordenador = _criar_coordenador(hass)
+    coordenador._alertas_persistentes = {
+        "A1": {
+            "id": "A1",
+            "titulo": "Chuvas Intensas",
+            "expires": "2026-10-01T18:00:00-03:00",
+        }
+    }
+
+    aioclient_mock.get(URL_RSS, text=RSS_VAZIO)
+    await coordenador._async_update_data()
+    await hass.async_block_till_done()
+
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(URL_RSS, text=RSS_VAZIO)
+    await coordenador._async_update_data()
+    await hass.async_block_till_done()
+
+    assert len(eventos) == 1  # apenas no primeiro ciclo
+
+
+async def test_evento_expirado_nao_dispara_quando_merge_falha(hass, aioclient_mock):
+    """Falha no merge não dispara expiração (fallback devolve só os novos)."""
+    eventos = []
+    hass.bus.async_listen(EVENT_ALERTA_EXPIRADO, eventos.append)
+
+    coordenador = _criar_coordenador(hass)
+    coordenador._alertas_persistentes = {
+        "A1": {
+            "id": "A1",
+            "titulo": "Chuvas Intensas",
+            "expires": "2026-10-01T18:00:00-03:00",
+        }
+    }
+
+    aioclient_mock.get(URL_RSS, text=RSS_VAZIO)
+    with patch(
+        "custom_components.inmet_alertas.coordinator.mesclar_alertas",
+        side_effect=RuntimeError("boom"),
+    ):
+        dados = await coordenador._async_update_data()
+    await hass.async_block_till_done()
+
+    assert dados["count"] == 0
+    assert eventos == []

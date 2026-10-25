@@ -15,5 +15,5 @@
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/roalvesrj/ha-inmet-alertas/issues",
-  "version": "1.16.2"
+  "version": "2.0.0"
 }

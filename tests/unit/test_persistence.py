@@ -83,3 +83,9 @@ def test_merge_nao_muta_dicts_originais():
     novos = [{"id": "A1", "titulo": "novo"}]
     mesclar_alertas(persistentes, novos, AGORA)
     assert persistentes["A1"]["titulo"] == "antigo"
+
+
+def test_valido_com_data_naive_adota_timezone_da_referencia():
+    """Datetime sem tz adota o fuso da referência antes de comparar."""
+    assert alerta_ainda_valido({"expires": "2026-10-08T18:00:00"}, AGORA) is True
+    assert alerta_ainda_valido({"expires": "2026-10-06T18:00:00"}, AGORA) is False

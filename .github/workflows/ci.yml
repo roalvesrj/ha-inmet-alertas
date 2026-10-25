@@ -8,6 +8,7 @@ jobs:
   tests:
     name: Testes (suíte completa)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,15 +24,17 @@ jobs:
           --cov=custom_components.inmet_alertas.config_flow
           --cov-report=term-missing
           --cov-fail-under=100
-      - name: Cobertura geral do pacote (rumo ao Silver, meta 95%)
+      - name: Cobertura geral do pacote (piso de regressão 71%; meta Silver: 95%)
         run: >
           python -m pytest tests -q
           --cov=custom_components.inmet_alertas
           --cov-report=term-missing
+          --cov-fail-under=71
 
   frontend:
     name: Testes JS (plugin do mapa)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -43,6 +46,7 @@ jobs:
   validate:
     name: Hassfest + HACS
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: home-assistant/actions/hassfest@master

@@ -4,7 +4,7 @@ Processa coordenadas de polígonos, calcula áreas e centros geográficos.
 """
 import logging
 import math
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Dict, Any, Optional
 
 _LOGGER = logging.getLogger(__name__)
 

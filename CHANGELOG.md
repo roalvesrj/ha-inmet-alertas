@@ -21,7 +21,7 @@
 ### 📖 Documentação
 - `www/README.md` alinhado à integração (sem a seção de clima, ainda não lançada) e com a nova URL do plugin.
 
-## v2.0.0 - em desenvolvimento (develop)
+## v2.0.0 - 25/10/2026 (develop)
 
 ### 🌦️ Clima no mapa (radar e satélite)
 - Overlay de **radar de chuva** e de **nuvens por satélite** ([RainViewer](https://www.rainviewer.com/), keyless) selecionável no controle ("Clima")

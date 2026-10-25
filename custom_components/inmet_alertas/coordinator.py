@@ -103,11 +103,17 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.warning("INMET indisponível: %s", erro)
             self._indisponivel_logado = True
 
-    def _marcar_disponivel(self) -> None:
+    def _marcar_disponivel(self, rate_limited: bool = False) -> None:
         """Informa a volta do serviço uma única vez."""
-        if self._indisponivel_logado:
+        if not self._indisponivel_logado:
+            return
+        if rate_limited:
+            _LOGGER.info(
+                "INMET voltou a responder (com rate limiting) — alertas mantidos"
+            )
+        else:
             _LOGGER.info("INMET voltou a responder normalmente")
-            self._indisponivel_logado = False
+        self._indisponivel_logado = False
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Buscar dados do INMET."""
@@ -158,7 +164,7 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # Durante rate limiting, manter alertas existentes via persistência
                 alertas_finais = await self._merge_alertas_com_persistencia(alerts, now)
                 self._diagnostico["pending_caps"] = len(self._pending_caps)
-                self._marcar_disponivel()
+                self._marcar_disponivel(rate_limited=True)
 
                 return {
                     "alerts": alertas_finais,
@@ -296,7 +302,7 @@ class INMETDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     [], dt_util.now()
                 )
                 self._diagnostico["pending_caps"] = len(self._pending_caps)
-                self._marcar_disponivel()
+                self._marcar_disponivel(rate_limited=True)
 
                 return {
                     "alerts": alertas_finais,

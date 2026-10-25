@@ -30,6 +30,7 @@ Um **botão de camadas** no canto do mapa (com badge da contagem de polígonos) 
 
 - **Mapa base**: Padrão do cartão, Cartográfico, Satélite e Topográfico — tiles da **Esri**, **sem API key**;
 - **Alertas**: Todas, Grande Perigo + Perigo ou somente uma severidade — com contagem de polígonos em cada opção;
+- **Clima**: Nenhuma, Chuva (radar) ou Nuvens (satélite) — overlay keyless do [RainViewer](https://www.rainviewer.com/); atualiza a cada 5 min e o polling só roda com um overlay ativo (opções sem frame aparecem como "— indisponível").
 
 ## Opções
 
@@ -46,6 +47,8 @@ Um **botão de camadas** no canto do mapa (com badge da contagem de polígonos) 
 | `strokeWeight` | número | `2` | Espessura da borda |
 | `severidades` | lista/string | todas | Severidades visíveis |
 | `basemap` | string | mapa do cartão | `cartografico`, `satelite` ou `topografico` |
+| `clima` | string | nenhuma | `radar` ou `nuvens` (overlay do RainViewer) |
+| `climaOpacidade` | número | `0.6` | Opacidade do overlay de clima (0.1–1) |
 | `showLayerControl` | bool | `true` | Exibe o controle de camadas |
 | `basemaps` | objeto | — | Estende/sobrescreve definições de basemap |
 
