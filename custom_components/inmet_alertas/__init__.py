@@ -7,7 +7,7 @@ from pathlib import Path
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
@@ -70,7 +70,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     )
 
     await _async_registrar_recurso_estatico(hass)
-    _agendar_registro_card(hass)
+    await _async_agendar_registro_card(hass)
 
     return True
 
@@ -104,50 +104,56 @@ async def _async_registrar_recurso_estatico(hass: HomeAssistant) -> None:
         )
 
 
-@callback
-def _registrar_card_no_frontend(hass: HomeAssistant) -> bool:
-    """Carrega o card de alertas no frontend, sem passo manual no Lovelace.
+async def _async_registrar_recurso_lovelace(hass: HomeAssistant) -> bool:
+    """Registra o card como recurso do Lovelace, sem passo manual.
 
-    Equivale ao que já acontece com o plugin do mapa: a integração serve o
-    arquivo e o disponibiliza sozinha. Usa a URL versionada para furar cache.
-    Retorna False quando o frontend ainda não foi configurado.
+    Equivale ao plugin do mapa: a integração serve o arquivo na própria rota
+    estática e o disponibiliza sozinha. Usa URL versionada para furar cache.
+    Retorna False quando o Lovelace ainda não subiu (ou está em modo YAML).
     """
     # Import tardio: mantém o pacote leve para os testes unitários (sem HA)
-    from homeassistant.components.frontend import (
-        DATA_EXTRA_MODULE_URL,
-        add_extra_js_url,
-    )
+    from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
 
-    gerenciador = hass.data.get(DATA_EXTRA_MODULE_URL)
-    if gerenciador is None:
+    lovelace = hass.data.get(LOVELACE_DOMAIN)
+    recursos = getattr(lovelace, "resources", None) if lovelace else None
+    criar = getattr(recursos, "async_create_item", None)
+    listar = getattr(recursos, "async_items", None)
+    if not recursos or not criar or not listar:
         return False
 
     caminho = f"/{DOMAIN}/{CARD_ALERTAS_JS}"
-    # Remove versões antigas (sem reiniciar o HA após um upgrade).
-    for url in list(gerenciador.urls):
-        if url.split("?", 1)[0] == caminho:
-            gerenciador.remove(url)
+    url = f"{caminho}?v={VERSION}"
 
-    add_extra_js_url(hass, f"{caminho}?v={VERSION}")
-    _LOGGER.debug("Card de alertas carregado no frontend: %s", caminho)
+    await recursos.async_get_info()  # garante que o storage foi carregado
+    for item in listar():
+        if str(item.get("url", "")).split("?", 1)[0] != caminho:
+            continue
+        if item.get("url") != url and item.get("id"):
+            await recursos.async_update_item(item["id"], {"url": url})
+            _LOGGER.debug("Recurso do card atualizado: %s", url)
+        return True
+
+    await criar({"res_type": "module", "url": url})
+    _LOGGER.debug("Card de alertas registrado no Lovelace: %s", url)
     return True
 
 
-@callback
-def _agendar_registro_card(hass: HomeAssistant) -> None:
-    """Registra o card agora ou, se o frontend ainda não subiu, no start do HA."""
-    if _registrar_card_no_frontend(hass):
+async def _async_agendar_registro_card(hass: HomeAssistant) -> None:
+    """Registra o card agora ou, se o Lovelace ainda não subiu, no start."""
+    if await _async_registrar_recurso_lovelace(hass):
         return
 
-    chave = f"{DOMAIN}_card_registro_agendado"
+    chave = f"{DOMAIN}_card_recurso_agendado"
     if hass.data.get(chave) or hass.is_running:
-        _LOGGER.debug("Frontend indisponível; card de alertas não será carregado")
+        _LOGGER.debug("Lovelace indisponível; card de alertas não registrado")
         return
 
     hass.data[chave] = True
     hass.bus.async_listen_once(
         EVENT_HOMEASSISTANT_STARTED,
-        lambda _evento: _registrar_card_no_frontend(hass),
+        lambda _evento: hass.async_create_task(
+            _async_registrar_recurso_lovelace(hass)
+        ),
     )
 
 
@@ -171,7 +177,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.runtime_data = coordenador
 
-    _agendar_registro_card(hass)
+    await _async_agendar_registro_card(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

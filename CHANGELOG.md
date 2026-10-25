@@ -50,7 +50,7 @@
 
 ### 🃏 Card de alertas por severidade
 - Novo `www/inmet-alert-card.js` (`custom:inmet-alert-card`): um card para cada severidade (Perigo / Grande Perigo / Perigo Potencial), com barra de progresso, contagem regressiva, chips e detalhes expansíveis
-- **Carregado automaticamente** pela integração (`add_extra_js_url`, URL versionada) — sem passo manual de recurso no Lovelace
+- **Registrado automaticamente** pela integração como recurso do Lovelace (URL versionada, sem passo manual)
 - Visual inspirado no [weather_alerts_card](https://github.com/seevee/weather_alerts_card) (MIT), adaptado ao atributo `alertas` dos nossos sensores — sem dependências e sem build
 - Feed fora do ar mostra "Dados do INMET indisponíveis" (nunca "nenhum alerta")
 - 10 testes novos (`node --test`) para filtro, datas, progresso, resumo de municípios e configuração

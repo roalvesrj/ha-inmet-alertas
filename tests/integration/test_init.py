@@ -5,14 +5,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import voluptuous as vol
-from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL, UrlManager
+from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.inmet_alertas import (
-    _registrar_card_no_frontend,
+    _async_registrar_recurso_lovelace,
     async_migrate_entry,
 )
 from custom_components.inmet_alertas.const import (
@@ -243,8 +243,35 @@ async def test_setup_falha_no_feed_gera_setup_retry(hass, aioclient_mock):
 
 
 async def test_card_de_alertas_carregado_automaticamente(hass):
-    """O card é registrado no frontend sozinho (sem recurso no Lovelace)."""
-    hass.data[DATA_EXTRA_MODULE_URL] = UrlManager(lambda *_args: None, [])
+    """O card é registrado como recurso do Lovelace sozinho (sem passo manual)."""
+
+    class RecursosStub:
+        def __init__(self):
+            self.itens = []
+            self.criados = []
+            self.atualizados = []
+
+        async def async_get_info(self):
+            return {"resources": len(self.itens)}
+
+        def async_items(self):
+            return list(self.itens)
+
+        async def async_create_item(self, data):
+            self.criados.append(data)
+            item = {**data, "id": f"id{len(self.itens)}"}
+            self.itens.append(item)
+            return item
+
+        async def async_update_item(self, item_id, updates):
+            self.atualizados.append((item_id, updates))
+            for item in self.itens:
+                if item["id"] == item_id:
+                    item.update(updates)
+            return item
+
+    recursos = RecursosStub()
+    hass.data[LOVELACE_DOMAIN] = type("Lovelace", (), {"resources": recursos})()
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -263,30 +290,53 @@ async def test_card_de_alertas_carregado_automaticamente(hass):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-    urls = hass.data[DATA_EXTRA_MODULE_URL].urls
-    do_card = [
-        url
-        for url in urls
-        if url.split("?", 1)[0] == "/inmet_alertas/inmet-alert-card.js"
+    assert recursos.criados == [
+        {"res_type": "module", "url": "/inmet_alertas/inmet-alert-card.js?v=2.0.0"}
     ]
-    assert len(do_card) == 1
-    assert do_card[0].endswith("?v=2.0.0")
+    assert recursos.atualizados == []
 
 
-async def test_card_de_alertas_substitui_versao_antiga(hass):
-    """Nova versão troca a URL antiga, sem deixar módulo duplicado."""
-    hass.data[DATA_EXTRA_MODULE_URL] = UrlManager(
-        lambda *_args: None,
-        ["/inmet_alertas/inmet-alert-card.js?v=1.0.0"],
-    )
+async def test_card_de_alertas_atualiza_recurso_existente(hass):
+    """Versão nova atualiza a URL do recurso em vez de duplicar."""
 
-    assert _registrar_card_no_frontend(hass) is True
+    class RecursosStub:
+        def __init__(self):
+            self.itens = [
+                {
+                    "id": "abc",
+                    "type": "module",
+                    "url": "/inmet_alertas/inmet-alert-card.js?v=1.0.0",
+                }
+            ]
+            self.criados = []
+            self.atualizados = []
 
-    urls = hass.data[DATA_EXTRA_MODULE_URL].urls
-    do_card = [
-        url
-        for url in urls
-        if url.split("?", 1)[0] == "/inmet_alertas/inmet-alert-card.js"
+        async def async_get_info(self):
+            return {"resources": len(self.itens)}
+
+        def async_items(self):
+            return list(self.itens)
+
+        async def async_create_item(self, data):
+            self.criados.append(data)
+
+        async def async_update_item(self, item_id, updates):
+            self.atualizados.append((item_id, updates))
+            for item in self.itens:
+                if item["id"] == item_id:
+                    item.update(updates)
+
+    recursos = RecursosStub()
+    hass.data[LOVELACE_DOMAIN] = type("Lovelace", (), {"resources": recursos})()
+
+    assert await _async_registrar_recurso_lovelace(hass) is True
+    assert recursos.criados == []
+    assert recursos.atualizados == [
+        ("abc", {"url": "/inmet_alertas/inmet-alert-card.js?v=2.0.0"})
     ]
-    assert len(do_card) == 1
-    assert do_card[0].endswith("?v=2.0.0")
+
+
+async def test_card_de_alertas_sem_lovelace_nao_quebra(hass):
+    """Sem Lovelace (ou modo YAML) a integração segue normalmente."""
+    hass.data.pop(LOVELACE_DOMAIN, None)
+    assert await _async_registrar_recurso_lovelace(hass) is False
