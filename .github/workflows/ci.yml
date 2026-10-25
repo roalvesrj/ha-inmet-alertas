@@ -24,7 +24,7 @@ jobs:
           --cov=custom_components.inmet_alertas.config_flow
           --cov-report=term-missing
           --cov-fail-under=100
-      - name: Cobertura geral do pacote (piso de regressão 71%; meta Silver: 95%)
+      - name: Cobertura geral do pacote (piso de regressão 71%; meta Silver 95%)
         run: >
           python -m pytest tests -q
           --cov=custom_components.inmet_alertas
