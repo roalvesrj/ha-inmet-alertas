@@ -2,6 +2,7 @@
   "domain": "inmet_alertas",
   "name": "INMET Alertas",
   "after_dependencies": [
+    "frontend",
     "persistent_notification"
   ],
   "codeowners": [

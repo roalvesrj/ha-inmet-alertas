@@ -134,14 +134,7 @@ Documentação do plugin: [`www/README.md`](https://github.com/roalvesrj/ha-inme
 
 Além do mapa, a integração inclui um card de alertas (visual inspirado no projeto [weather_alerts_card](https://github.com/seevee/weather_alerts_card), MIT) com barra de progresso, contagem regressiva e detalhes expansíveis. Ele lê o atributo `alertas` do sensor do estado e pode ser filtrado por severidade.
 
-**1. Adicione o recurso** (Configurações → Painéis → Recursos → Adicionar):
-
-```yaml
-url: /inmet_alertas/inmet-alert-card.js
-type: module
-```
-
-**2. Um card para cada severidade**:
+O card é **carregado automaticamente pela integração** (via módulo extra do frontend) — não é preciso adicionar recurso no Lovelace. Basta usar um card por severidade:
 
 ```yaml
 type: custom:inmet-alert-card

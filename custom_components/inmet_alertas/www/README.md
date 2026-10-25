@@ -54,14 +54,7 @@ Um **botão de camadas** no canto do mapa (com badge da contagem de polígonos) 
 
 ## Card de alertas (`inmet-alert-card.js`)
 
-O mesmo pacote inclui um card de alertas por severidade (sem dependências, sem build). Adicione o recurso em **Configurações → Painéis → Recursos**:
-
-```yaml
-url: /inmet_alertas/inmet-alert-card.js
-type: module
-```
-
-E use um card por severidade:
+O mesmo pacote inclui um card de alertas por severidade (sem dependências, sem build), **carregado automaticamente pela integração** — não precisa adicionar recurso no Lovelace. Use um card por severidade:
 
 ```yaml
 type: custom:inmet-alert-card

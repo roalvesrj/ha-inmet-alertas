@@ -6,12 +6,13 @@ from pathlib import Path
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
+    CARD_ALERTAS_JS,
     CONF_ESTADO,
     CONF_NOTIFICACOES_PERIGO,
     CONF_UPDATE_INTERVAL,
@@ -20,6 +21,7 @@ from .const import (
     DOMAIN,
     ESTADOS_BRASILEIROS,
     SERVICE_ATUALIZAR_ALERTAS,
+    VERSION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,6 +70,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     )
 
     await _async_registrar_recurso_estatico(hass)
+    _agendar_registro_card(hass)
 
     return True
 
@@ -101,6 +104,53 @@ async def _async_registrar_recurso_estatico(hass: HomeAssistant) -> None:
         )
 
 
+@callback
+def _registrar_card_no_frontend(hass: HomeAssistant) -> bool:
+    """Carrega o card de alertas no frontend, sem passo manual no Lovelace.
+
+    Equivale ao que já acontece com o plugin do mapa: a integração serve o
+    arquivo e o disponibiliza sozinha. Usa a URL versionada para furar cache.
+    Retorna False quando o frontend ainda não foi configurado.
+    """
+    # Import tardio: mantém o pacote leve para os testes unitários (sem HA)
+    from homeassistant.components.frontend import (
+        DATA_EXTRA_MODULE_URL,
+        add_extra_js_url,
+    )
+
+    gerenciador = hass.data.get(DATA_EXTRA_MODULE_URL)
+    if gerenciador is None:
+        return False
+
+    caminho = f"/{DOMAIN}/{CARD_ALERTAS_JS}"
+    # Remove versões antigas (sem reiniciar o HA após um upgrade).
+    for url in list(gerenciador.urls):
+        if url.split("?", 1)[0] == caminho:
+            gerenciador.remove(url)
+
+    add_extra_js_url(hass, f"{caminho}?v={VERSION}")
+    _LOGGER.debug("Card de alertas carregado no frontend: %s", caminho)
+    return True
+
+
+@callback
+def _agendar_registro_card(hass: HomeAssistant) -> None:
+    """Registra o card agora ou, se o frontend ainda não subiu, no start do HA."""
+    if _registrar_card_no_frontend(hass):
+        return
+
+    chave = f"{DOMAIN}_card_registro_agendado"
+    if hass.data.get(chave) or hass.is_running:
+        _LOGGER.debug("Frontend indisponível; card de alertas não será carregado")
+        return
+
+    hass.data[chave] = True
+    hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STARTED,
+        lambda _evento: _registrar_card_no_frontend(hass),
+    )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Configuração ao adicionar a integração pela interface."""
     # Import tardio: mantém o pacote leve para os testes unitários (sem HA)
@@ -120,6 +170,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordenador.async_config_entry_first_refresh()
 
     entry.runtime_data = coordenador
+
+    _agendar_registro_card(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

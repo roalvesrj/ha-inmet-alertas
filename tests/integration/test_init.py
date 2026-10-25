@@ -5,12 +5,16 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import voluptuous as vol
+from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL, UrlManager
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.inmet_alertas import async_migrate_entry
+from custom_components.inmet_alertas import (
+    _registrar_card_no_frontend,
+    async_migrate_entry,
+)
 from custom_components.inmet_alertas.const import (
     CONF_ESTADO,
     CONF_NOTIFICACOES_PERIGO,
@@ -236,3 +240,53 @@ async def test_setup_falha_no_feed_gera_setup_retry(hass, aioclient_mock):
     await hass.async_block_till_done()
 
     assert entry.state is ConfigEntryState.SETUP_RETRY
+
+
+async def test_card_de_alertas_carregado_automaticamente(hass):
+    """O card é registrado no frontend sozinho (sem recurso no Lovelace)."""
+    hass.data[DATA_EXTRA_MODULE_URL] = UrlManager(lambda *_args: None, [])
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        unique_id=f"{DOMAIN}_GO",
+        data={CONF_ESTADO: "GO"},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.inmet_alertas.coordinator."
+        "INMETDataUpdateCoordinator.async_config_entry_first_refresh",
+        new_callable=AsyncMock,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    urls = hass.data[DATA_EXTRA_MODULE_URL].urls
+    do_card = [
+        url
+        for url in urls
+        if url.split("?", 1)[0] == "/inmet_alertas/inmet-alert-card.js"
+    ]
+    assert len(do_card) == 1
+    assert do_card[0].endswith("?v=2.0.0")
+
+
+async def test_card_de_alertas_substitui_versao_antiga(hass):
+    """Nova versão troca a URL antiga, sem deixar módulo duplicado."""
+    hass.data[DATA_EXTRA_MODULE_URL] = UrlManager(
+        lambda *_args: None,
+        ["/inmet_alertas/inmet-alert-card.js?v=1.0.0"],
+    )
+
+    assert _registrar_card_no_frontend(hass) is True
+
+    urls = hass.data[DATA_EXTRA_MODULE_URL].urls
+    do_card = [
+        url
+        for url in urls
+        if url.split("?", 1)[0] == "/inmet_alertas/inmet-alert-card.js"
+    ]
+    assert len(do_card) == 1
+    assert do_card[0].endswith("?v=2.0.0")
