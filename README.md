@@ -130,6 +130,47 @@ Documentação do plugin: [`www/README.md`](https://github.com/roalvesrj/ha-inme
 
 > Sem alertas ativos não há polígonos no mapa.
 
+## 🃏 Cards de alerta por severidade
+
+Além do mapa, a integração inclui um card de alertas (visual inspirado no projeto [weather_alerts_card](https://github.com/seevee/weather_alerts_card), MIT) com barra de progresso, contagem regressiva e detalhes expansíveis. Ele lê o atributo `alertas` do sensor do estado e pode ser filtrado por severidade.
+
+**1. Adicione o recurso** (Configurações → Painéis → Recursos → Adicionar):
+
+```yaml
+url: /inmet_alertas/inmet-alert-card.js
+type: module
+```
+
+**2. Um card para cada severidade**:
+
+```yaml
+type: custom:inmet-alert-card
+estado: RJ
+severidade: Perigo
+titulo: Alertas de Perigo
+```
+
+```yaml
+type: custom:inmet-alert-card
+estado: RJ
+severidade: Grande Perigo
+titulo: Alertas de Grande Perigo
+```
+
+| Opção | Descrição | Padrão |
+|---|---|---|
+| `estado` | Sigla do estado configurado na integração (`RJ`, `SP`, …) | — (ou use `entidade`) |
+| `entidade` | Entity ID do sensor, se preferir apontar direto | derivado de `estado` |
+| `severidade` | `Perigo`, `Grande Perigo`, `Perigo Potencial` ou `todas` | `todas` |
+| `titulo` | Título exibido acima dos alertas | — |
+| `maxAlertas` | Máximo de alertas exibidos | `5` |
+| `mostrarVazio` | Mostra "nenhum alerta" em vez de ocultar o card | `false` |
+| `mostrarDetalhes` | Seção expansível com descrição/instruções/fonte | `true` |
+| `mostrarProgresso` | Barra de progresso do período do alerta | `true` |
+| `mostrarMunicipios` | Linha com os municípios afetados | `true` |
+
+O card mostra "Dados do INMET indisponíveis" (em vez de "nenhum alerta") quando o sensor está `unavailable` — um feed fora do ar nunca é tratado como ausência de alertas.
+
 ## 🤖 Automações
 
 Exemplo — notificação apenas para alertas de Perigo/Grande Perigo (formato da interface do HA):

@@ -48,6 +48,12 @@
 ### 📖 Documentação
 - README repaginado: alinhado à integração (entity_id correto do sensor de diagnóstico, mapa base Esri, sem promessas de "tempo real") e sem seções infladas
 
+### 🃏 Card de alertas por severidade
+- Novo `www/inmet-alert-card.js` (`custom:inmet-alert-card`): um card para cada severidade (Perigo / Grande Perigo / Perigo Potencial), com barra de progresso, contagem regressiva, chips e detalhes expansíveis
+- Visual inspirado no [weather_alerts_card](https://github.com/seevee/weather_alerts_card) (MIT), adaptado ao atributo `alertas` dos nossos sensores — sem dependências e sem build
+- Feed fora do ar mostra "Dados do INMET indisponíveis" (nunca "nenhum alerta")
+- 10 testes novos (`node --test`) para filtro, datas, progresso, resumo de municípios e configuração
+
 ## v1.16.0 - 19/10/2026
 
 ### 🗺️ Camadas de mapa (plugin ha-map-card)

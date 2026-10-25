@@ -52,8 +52,36 @@ Um **botão de camadas** no canto do mapa (com badge da contagem de polígonos) 
 | `showLayerControl` | bool | `true` | Exibe o controle de camadas |
 | `basemaps` | objeto | — | Estende/sobrescreve definições de basemap |
 
-## Dependências
+## Card de alertas (`inmet-alert-card.js`)
 
+O mesmo pacote inclui um card de alertas por severidade (sem dependências, sem build). Adicione o recurso em **Configurações → Painéis → Recursos**:
+
+```yaml
+url: /inmet_alertas/inmet-alert-card.js
+type: module
+```
+
+E use um card por severidade:
+
+```yaml
+type: custom:inmet-alert-card
+estado: RJ
+severidade: Perigo
+titulo: Alertas de Perigo
+```
+
+```yaml
+type: custom:inmet-alert-card
+estado: RJ
+severidade: Grande Perigo
+titulo: Alertas de Grande Perigo
+```
+
+Opções: `estado` (ou `entidade`), `severidade` (`Perigo`, `Grande Perigo`, `Perigo Potencial`, `todas`), `titulo`, `maxAlertas` (5), `mostrarVazio` (false), `mostrarDetalhes` (true), `mostrarProgresso` (true), `mostrarMunicipios` (true).
+
+Visual inspirado no [weather_alerts_card](https://github.com/seevee/weather_alerts_card) (MIT), adaptado ao formato de dados da integração.
+
+## Dependências
 - Home Assistant
 - HACS
 - ha-map-card (instalado via HACS)
