@@ -210,7 +210,8 @@ export function normalizarConfig(config = {}) {
     entidade,
     severidade: normalizarSeveridade(config.severidade),
     titulo: String(config.titulo ?? '').trim(),
-    maxAlertas: Number.isFinite(maxAlertas) && maxAlertas > 0 ? maxAlertas : 5,
+    // 0 = sem limite; a paginação (quando ligada) cuida do volume.
+    maxAlertas: Number.isFinite(maxAlertas) && maxAlertas > 0 ? maxAlertas : 0,
     paginacao: config.paginacao === true,
     itensPorPagina:
       Number.isFinite(itensPorPagina) && itensPorPagina > 0
@@ -498,7 +499,11 @@ export class InmetAlertCard extends Base {
       return;
     }
 
-    const alertas = this._alertas().slice(0, this._config.maxAlertas);
+    const todos = this._alertas();
+    const alertas =
+      this._config.maxAlertas > 0
+        ? todos.slice(0, this._config.maxAlertas)
+        : todos;
     if (!alertas.length) {
       this._root.innerHTML = this._config.mostrarVazio
         ? this._moldura(

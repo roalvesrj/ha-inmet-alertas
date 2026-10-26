@@ -39,7 +39,7 @@
  * Versão do plugin — exibida no console, no título do botão de camadas e no
  * painel. Manter em sincronia com `manifest.json` e `const.VERSION`.
  */
-export const VERSAO_PLUGIN = '2.0.0';
+export const VERSAO_PLUGIN = '2.0.1';
 
 if (
   typeof document !== 'undefined' &&

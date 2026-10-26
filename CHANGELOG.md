@@ -21,7 +21,7 @@
 ### 📖 Documentação
 - `www/README.md` alinhado à integração (sem a seção de clima, ainda não lançada) e com a nova URL do plugin.
 
-## v2.0.0 - 25/10/2026 (develop)
+## v2.0.1 - 25/10/2026 (develop)
 
 ### 🌦️ Clima no mapa (radar e satélite)
 - Overlay de **radar de chuva** e de **nuvens por satélite** ([RainViewer](https://www.rainviewer.com/), keyless) selecionável no controle ("Clima")
@@ -55,6 +55,7 @@
 - Feed fora do ar mostra "Dados do INMET indisponíveis" (nunca "nenhum alerta")
 - 10 testes novos (`node --test`) para filtro, datas, progresso, resumo de municípios e configuração
 - **Paginação** (`paginacao`/`itensPorPagina`) para grandes volumes de alertas e **descrição resumida** em até 3 linhas (texto completo em "Ler detalhes")
+- **Correção**: o card não limita mais a 5 alertas por padrão (`maxAlertas` agora é "sem limite") — com 8 alertas ele mostrava apenas 5 e a paginação ficava presa em "1 de 5"
 
 ## v1.16.0 - 19/10/2026
 

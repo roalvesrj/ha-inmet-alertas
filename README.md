@@ -156,7 +156,7 @@ titulo: Alertas de Grande Perigo
 | `entidade` | Entity ID do sensor, se preferir apontar direto | derivado de `estado` |
 | `severidade` | `Perigo`, `Grande Perigo`, `Perigo Potencial` ou `todas` | `todas` |
 | `titulo` | Título exibido acima dos alertas | — |
-| `maxAlertas` | Máximo de alertas exibidos | `5` |
+| `maxAlertas` | Limite de alertas exibidos | sem limite |
 | `paginacao` | Mostra um alerta por vez, com navegação (‹ 1 de N ›) | `false` |
 | `itensPorPagina` | Alertas por página quando `paginacao: true` | `1` |
 | `mostrarVazio` | Mostra "nenhum alerta" em vez de ocultar o card | `false` |

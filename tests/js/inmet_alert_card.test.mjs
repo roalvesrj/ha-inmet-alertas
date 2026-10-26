@@ -126,7 +126,7 @@ test('normaliza a configuração do card', () => {
   const padrao = normalizarConfig({ estado: 'rj' });
   assert.equal(padrao.entidade, 'sensor.alertas_meteorologicos_rj');
   assert.equal(padrao.severidade, 'todas');
-  assert.equal(padrao.maxAlertas, 5);
+  assert.equal(padrao.maxAlertas, 0);
   assert.equal(padrao.paginacao, false);
   assert.equal(padrao.itensPorPagina, 1);
   assert.equal(padrao.mostrarDetalhes, true);
@@ -187,4 +187,18 @@ test('pagina alertas com limites normalizados', () => {
   assert.equal(paginarAlertas(lista, -5, 2).pagina, 0);
   assert.equal(paginarAlertas([], 0, 1).totalPaginas, 1);
   assert.deepEqual(paginarAlertas(null, 0, 1).itens, []);
+});
+
+test('paginação cobre todos os alertas (sem o limite padrão de 5)', () => {
+  // Regressão: com 8 alertas o card mostrava apenas 5 ("1 de 5").
+  const oito = Array.from({ length: 8 }, (_, i) => ({ id: i }));
+  const config = normalizarConfig({ estado: 'RJ', paginacao: true });
+
+  assert.equal(config.maxAlertas, 0, 'sem limite por padrão');
+
+  const lista =
+    config.maxAlertas > 0 ? oito.slice(0, config.maxAlertas) : oito;
+  const pagina = paginarAlertas(lista, 0, config.itensPorPagina);
+  assert.equal(pagina.total, 8);
+  assert.equal(pagina.totalPaginas, 8);
 });

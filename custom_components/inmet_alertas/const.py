@@ -4,7 +4,7 @@ from typing import Final
 # Informações da integração
 DOMAIN: Final = "inmet_alertas"
 NAME: Final = "INMET Alertas"
-VERSION: Final = "2.0.0"
+VERSION: Final = "2.0.1"
 
 # Card de alertas servido junto com o plugin (carregado automaticamente)
 CARD_ALERTAS_JS: Final = "inmet-alert-card.js"
