@@ -8,6 +8,8 @@ O plugin é instalado automaticamente quando você instala a integração INMET 
 
 ## Uso
 
+> ⚠️ **Atualizando de 1.16.0 ou anterior?** A URL mudou de `/hacsfiles/inmet_alertas/plugin_inmet_polygons.js` para `/inmet_alertas/plugin_inmet_polygons.js` (o prefixo `/hacsfiles/` é exclusivo do HACS). Atualize o `url:` do plugin no card.
+
 ```yaml
 type: custom:map-card
 title: "Alertas INMET"

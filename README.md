@@ -90,7 +90,9 @@ data:
 
 ## 🗺️ Mapa com polígonos (plugin ha-map-card)
 
-Instale o **ha-map-card** pela HACS e aponte o plugin (a URL fica disponível automaticamente após instalar a integração):
+Instale o **ha-map-card** pela HACS e aponte o plugin (a URL fica disponível automaticamente após instalar a integração).
+
+> ⚠️ **Atualizando de 1.16.0 ou anterior?** A rota do plugin mudou para `/inmet_alertas/plugin_inmet_polygons.js` — o prefixo `/hacsfiles/` é exclusivo do HACS e a integração não pode mais registrar nada ali. Se o mapa parou de renderizar, atualize a `url:` do plugin no card (o `?v=` antigo também pode ser removido ou trocado).
 
 ```yaml
 type: custom:map-card
