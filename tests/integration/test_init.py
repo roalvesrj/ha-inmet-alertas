@@ -1,4 +1,4 @@
-﻿"""Testes de setup/unload e de migraÃ§Ã£o de config entry."""
+"""Testes de setup/unload e de migração de config entry."""
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
@@ -26,7 +26,7 @@ from custom_components.inmet_alertas.const import (
 
 
 async def test_migracao_v1_para_v2_move_settings_para_options(hass):
-    """v1 (tudo em data) â†’ v2 (estado em data, ajustes em options)."""
+    """v1 (tudo em data) → v2 (estado em data, ajustes em options)."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=1,
@@ -50,7 +50,7 @@ async def test_migracao_v1_para_v2_move_settings_para_options(hass):
 
 
 async def test_migracao_preserva_options_existentes(hass):
-    """Options jÃ¡ definidas nÃ£o sÃ£o sobrescritas pela migraÃ§Ã£o."""
+    """Options já definidas não são sobrescritas pela migração."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=1,
@@ -96,7 +96,7 @@ async def test_setup_cria_entidades_e_unload_marca_indisponivel(hass):
 
 
 async def test_servico_atualizar_alertas_valida_estado(hass):
-    """ServiÃ§o: dispara refresh no estado configurado e valida a entrada."""
+    """Serviço: dispara refresh no estado configurado e valida a entrada."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=2,
@@ -124,13 +124,13 @@ async def test_servico_atualizar_alertas_valida_estado(hass):
         )
         mock_refresh.assert_awaited_once()
 
-    # Estado vÃ¡lido, mas nÃ£o configurado â†’ ServiceValidationError
+    # Estado válido, mas não configurado → ServiceValidationError
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
             DOMAIN, SERVICE_ATUALIZAR_ALERTAS, {CONF_ESTADO: "RJ"}, blocking=True
         )
 
-    # Estado fora do schema â†’ invÃ¡lido na prÃ³pria validaÃ§Ã£o do serviÃ§o
+    # Estado fora do schema → inválido na própria validação do serviço
     with pytest.raises(vol.Invalid):
         await hass.services.async_call(
             DOMAIN, SERVICE_ATUALIZAR_ALERTAS, {CONF_ESTADO: "XX"}, blocking=True
@@ -167,7 +167,7 @@ async def test_entidades_ficam_indisponiveis_quando_ciclo_falha(hass):
 
 
 async def test_servico_erro_interno_levanta_home_assistant_error(hass):
-    """action-exceptions: falha de execuÃ§Ã£o do serviÃ§o â†’ HomeAssistantError."""
+    """action-exceptions: falha de execução do serviço → HomeAssistantError."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=2,
@@ -198,7 +198,7 @@ async def test_servico_erro_interno_levanta_home_assistant_error(hass):
 
 
 async def test_migracao_entry_corrompida_retorna_false(hass):
-    """Entry v1 sem 'estado' â†’ migraÃ§Ã£o aborta (False); o HA reconfigura."""
+    """Entry v1 sem 'estado' → migração aborta (False); o HA reconfigura."""
     entry = MockConfigEntry(domain=DOMAIN, version=1, data={}, options={})
     entry.add_to_hass(hass)
 
@@ -207,7 +207,7 @@ async def test_migracao_entry_corrompida_retorna_false(hass):
 
 
 async def test_migracao_entry_ja_v2_nao_altera_dados(hass):
-    """Entry jÃ¡ na versÃ£o 2 â†’ migraÃ§Ã£o Ã© no-op e preserva data/options."""
+    """Entry já na versão 2 → migração é no-op e preserva data/options."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=2,
@@ -224,7 +224,7 @@ async def test_migracao_entry_ja_v2_nao_altera_dados(hass):
 
 
 async def test_setup_falha_no_feed_gera_setup_retry(hass, aioclient_mock):
-    """test-before-setup: feed fora do ar â†’ ConfigEntryNotReady + retry do HA."""
+    """test-before-setup: feed fora do ar → ConfigEntryNotReady + retry do HA."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=2,
@@ -243,7 +243,7 @@ async def test_setup_falha_no_feed_gera_setup_retry(hass, aioclient_mock):
 
 
 async def test_card_de_alertas_carregado_automaticamente(hass):
-    """O card Ã© registrado como recurso do Lovelace sozinho (sem passo manual)."""
+    """O card é registrado como recurso do Lovelace sozinho (sem passo manual)."""
 
     class RecursosStub:
         def __init__(self):
@@ -291,13 +291,13 @@ async def test_card_de_alertas_carregado_automaticamente(hass):
         await hass.async_block_till_done()
 
     assert recursos.criados == [
-        {"res_type": "module", "url": "/inmet_alertas/inmet-alert-card.js?v=2.0.1"}
+        {"res_type": "module", "url": "/inmet_alertas/inmet-alert-card.js?v=2.0.2"}
     ]
     assert recursos.atualizados == []
 
 
 async def test_card_de_alertas_atualiza_recurso_existente(hass):
-    """VersÃ£o nova atualiza a URL do recurso em vez de duplicar."""
+    """Versão nova atualiza a URL do recurso em vez de duplicar."""
 
     class RecursosStub:
         def __init__(self):
@@ -332,11 +332,11 @@ async def test_card_de_alertas_atualiza_recurso_existente(hass):
     assert await _async_registrar_recurso_lovelace(hass) is True
     assert recursos.criados == []
     assert recursos.atualizados == [
-        ("abc", {"url": "/inmet_alertas/inmet-alert-card.js?v=2.0.1"})
+        ("abc", {"url": "/inmet_alertas/inmet-alert-card.js?v=2.0.2"})
     ]
 
 
 async def test_card_de_alertas_sem_lovelace_nao_quebra(hass):
-    """Sem Lovelace (ou modo YAML) a integraÃ§Ã£o segue normalmente."""
+    """Sem Lovelace (ou modo YAML) a integração segue normalmente."""
     hass.data.pop(LOVELACE_DOMAIN, None)
     assert await _async_registrar_recurso_lovelace(hass) is False

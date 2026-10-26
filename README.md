@@ -112,6 +112,8 @@ No canto do mapa há um **botão de camadas** (com a contagem de polígonos) que
 - **Mapa base**: Padrão do cartão, **Cartográfico**, **Satélite** ou **Topográfico** — tiles da **Esri**, sem API key (os tiles do OpenStreetMap bloqueiam aplicativos);
 - **Clima**: **Nenhuma**, **Chuva (radar)** ou **Nuvens (satélite)** — overlay keyless do [RainViewer](https://www.rainviewer.com/), atualizado a cada 5 min (o polling só roda com um overlay ativo).
 
+O painel fecha ao clicar fora dele (ou com `Esc`), e as escolhas feitas no controle são lembradas no próximo carregamento (por card/estado, via `localStorage` — desative com `persistirCamadas: false`).
+
 Opções do plugin:
 
 | Opção | Descrição | Padrão |
@@ -122,6 +124,7 @@ Opções do plugin:
 | `clima` | `radar` ou `nuvens` (overlay do RainViewer) | nenhuma |
 | `climaOpacidade` | Opacidade do overlay de clima (0.1–1) | `0.6` |
 | `showLayerControl` | Exibe o controle de camadas | `true` |
+| `persistirCamadas` | Lembra as escolhas do controle (severidades, mapa base, clima) entre recarregamentos | `true` |
 | `showLabels` | Tooltip por polígono | `true` |
 | `autoFocus` | Centraliza o mapa na área com alertas | `true` |
 | `colors` | Cores por severidade (`grandePerigo`, `perigo`, `perigoPotencial`) | cores oficiais |

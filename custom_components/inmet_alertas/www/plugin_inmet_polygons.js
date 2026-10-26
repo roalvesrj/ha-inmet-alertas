@@ -39,7 +39,7 @@
  * Versão do plugin — exibida no console, no título do botão de camadas e no
  * painel. Manter em sincronia com `manifest.json` e `const.VERSION`.
  */
-export const VERSAO_PLUGIN = '2.0.1';
+export const VERSAO_PLUGIN = '2.0.2';
 
 if (
   typeof document !== 'undefined' &&
@@ -236,6 +236,66 @@ export function formatarCentro(centro) {
   return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 }
 
+// --- Persistência das escolhas do controle de camadas (localStorage) ---
+
+const PREFIXO_PERSISTENCIA = 'inmet_alertas_camadas';
+
+/** Chave estável por plugin + estados monitorados. */
+export function chavePersistenciaCamadas(nome, states) {
+  const sufixo = (Array.isArray(states) ? states : []).join(',') || 'padrao';
+  return `${PREFIXO_PERSISTENCIA}:${nome || 'inmet'}:${sufixo}`;
+}
+
+/** Valida o que veio do storage (ignora valores desconhecidos). */
+export function normalizarCamadasSalvas(dados) {
+  if (!dados || typeof dados !== 'object') {
+    return null;
+  }
+  const severidades = Array.isArray(dados.severidades)
+    ? dados.severidades.filter((valor) => SEVERIDADES.includes(valor))
+    : null;
+  const basemap =
+    typeof dados.basemap === 'string' && dados.basemap.trim()
+      ? dados.basemap.trim()
+      : null;
+  const clima = normalizarClima(dados.clima);
+  return { severidades, basemap, clima };
+}
+
+/** Lê e valida as camadas salvas; null quando não há/está corrompido. */
+export function lerCamadas(storage, chave) {
+  if (!storage) {
+    return null;
+  }
+  try {
+    const bruto = storage.getItem(chave);
+    return bruto ? normalizarCamadasSalvas(JSON.parse(bruto)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Grava as camadas; retorna false quando o storage falha/indisponível. */
+export function salvarCamadas(storage, chave, camadas) {
+  if (!storage) {
+    return false;
+  }
+  try {
+    storage.setItem(chave, JSON.stringify(camadas));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** True quando o clique ocorreu fora do controle (fecha o painel). */
+export function deveFecharControle(caminho, controleEl) {
+  if (!controleEl || !Array.isArray(caminho) || !caminho.length) {
+    return false;
+  }
+  return !caminho.includes(controleEl);
+}
+
 export default function (L, pluginBase, Logger) {
   return class INMETPolygonsPlugin extends pluginBase {
     constructor(map, name, options = {}) {
@@ -315,7 +375,34 @@ export default function (L, pluginBase, Logger) {
       this._unlockTimeoutId = null;
       this._destruido = false;
 
-      if (options.basemap) {
+      // Preferências do controle (persistem entre recarregamentos)
+      this._persistirCamadas = options.persistirCamadas !== false;
+      this._storage =
+        options.storage ||
+        (typeof localStorage !== 'undefined' ? localStorage : null);
+      this._chaveCamadas = chavePersistenciaCamadas(name, this.states);
+      this._aoClicarFora = (evento) => this._fecharSeClicouFora(evento);
+      this._aoTeclarFora = (evento) => {
+        if (evento.key === 'Escape') {
+          this._fecharControle();
+        }
+      };
+
+      // Restaura as escolhas feitas no controle (têm prioridade sobre o YAML)
+      const salvas = this._lerCamadas();
+      if (salvas) {
+        if (salvas.severidades) {
+          this.layerVisibility = normalizarSeveridades(salvas.severidades);
+        }
+        if (salvas.basemap) {
+          this.setBasemap(salvas.basemap);
+        }
+        if (salvas.clima) {
+          this._climaAtual = normalizarClima(salvas.clima);
+        }
+      }
+
+      if (options.basemap && !this._basemapAtual) {
         this.setBasemap(options.basemap);
       }
 
@@ -622,6 +709,7 @@ export default function (L, pluginBase, Logger) {
       this.layerVisibility[severity] = !!visivel;
       this.aplicarVisibilidade();
       this._atualizarControleValores();
+      this._salvarCamadas();
     }
 
     /**
@@ -634,6 +722,7 @@ export default function (L, pluginBase, Logger) {
       }
       this.aplicarVisibilidade();
       this._atualizarControleValores();
+      this._salvarCamadas();
     }
 
     /**
@@ -695,6 +784,7 @@ export default function (L, pluginBase, Logger) {
       }
 
       this._atualizarControleValores();
+      this._salvarCamadas();
     }
 
     _ocultarCamadasBaseDoCartao() {
@@ -844,6 +934,7 @@ export default function (L, pluginBase, Logger) {
       }
       this._aplicarClima();
       this._atualizarControleValores();
+      this._salvarCamadas();
     }
 
     _aplicarClima() {
@@ -1111,7 +1202,83 @@ export default function (L, pluginBase, Logger) {
         'aria-expanded',
         String(this._controleExpandido),
       );
+      if (this._controleExpandido) {
+        this._ativarFecharFora();
+      } else {
+        this._desativarFecharFora();
+      }
       this._atualizarControleValores();
+    }
+
+    /** Fecha o painel do controle. */
+    _fecharControle() {
+      this._controleExpandido = false;
+      const el = this._controleEl;
+      if (el) {
+        el.classList.remove('aberto');
+        el.querySelector('.inmet-camadas-botao')?.setAttribute(
+          'aria-expanded',
+          'false',
+        );
+      }
+      this._desativarFecharFora();
+      this._atualizarControleValores();
+    }
+
+    /** Fecha o painel quando o clique acontece fora dele. */
+    _fecharSeClicouFora(evento) {
+      if (!this._controleExpandido || !this._controleEl) {
+        return;
+      }
+      const caminho =
+        typeof evento.composedPath === 'function' ? evento.composedPath() : [];
+      if (caminho.length) {
+        if (!deveFecharControle(caminho, this._controleEl)) {
+          return;
+        }
+      } else if (this._controleEl.contains?.(evento.target)) {
+        return;
+      }
+      this._fecharControle();
+    }
+
+    _ativarFecharFora() {
+      if (typeof document === 'undefined') {
+        return;
+      }
+      document.addEventListener('click', this._aoClicarFora, true);
+      document.addEventListener('keydown', this._aoTeclarFora);
+    }
+
+    _desativarFecharFora() {
+      if (typeof document === 'undefined') {
+        return;
+      }
+      document.removeEventListener('click', this._aoClicarFora, true);
+      document.removeEventListener('keydown', this._aoTeclarFora);
+    }
+
+    /** Lê as preferências do controle (null quando não há). */
+    _lerCamadas() {
+      if (!this._persistirCamadas) {
+        return null;
+      }
+      return lerCamadas(this._storage, this._chaveCamadas);
+    }
+
+    /** Grava as preferências do controle. */
+    _salvarCamadas() {
+      if (!this._persistirCamadas) {
+        return;
+      }
+      const severidades = SEVERIDADES.filter(
+        (severidade) => this.layerVisibility[severidade],
+      );
+      salvarCamadas(this._storage, this._chaveCamadas, {
+        severidades,
+        basemap: this._basemapAtual,
+        clima: this._climaAtual,
+      });
     }
 
     _atualizarControleValores() {
@@ -1204,6 +1371,7 @@ export default function (L, pluginBase, Logger) {
     destroy() {
       try {
         this._destruido = true;
+        this._desativarFecharFora();
 
         if (this._retryTimeoutId) {
           clearTimeout(this._retryTimeoutId);

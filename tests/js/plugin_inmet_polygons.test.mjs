@@ -26,15 +26,20 @@ const moduleUrl = new URL(
 const {
   default: criarPlugin,
   BASEMAPS,
+  chavePersistenciaCamadas,
+  deveFecharControle,
   escaparHtml,
   extrairCamadasClima,
   formatarArea,
   formatarCentro,
+  lerCamadas,
+  normalizarCamadasSalvas,
   normalizarClima,
   normalizarOpacidade,
   normalizarSeveridades,
   presetParaVisibilidade,
   reiniciarClimaCompartilhado,
+  salvarCamadas,
   SEVERIDADES,
   VERSAO_PLUGIN,
   visibilidadeParaPreset,
@@ -813,4 +818,128 @@ test('formatarArea e formatarCentro degradam com dados inválidos', () => {
   assert.equal(formatarCentro(['x', 'y']), null);
   assert.equal(formatarCentro([1]), null);
   assert.equal(formatarCentro(undefined), null);
+});
+
+// --- Persistência e fechamento do controle de camadas ---
+
+function criarStorageFake(inicial = {}) {
+  const dados = { ...inicial };
+  return {
+    dados,
+    getItem: (chave) => (chave in dados ? dados[chave] : null),
+    setItem: (chave, valor) => {
+      dados[chave] = String(valor);
+    },
+    removeItem: (chave) => {
+      delete dados[chave];
+    },
+  };
+}
+
+test('chave de persistência é estável por plugin e estados', () => {
+  assert.equal(
+    chavePersistenciaCamadas('inmet', ['rio_de_janeiro']),
+    'inmet_alertas_camadas:inmet:rio_de_janeiro',
+  );
+  assert.equal(
+    chavePersistenciaCamadas('mapa', []),
+    'inmet_alertas_camadas:mapa:padrao',
+  );
+  assert.equal(
+    chavePersistenciaCamadas(undefined, undefined),
+    'inmet_alertas_camadas:inmet:padrao',
+  );
+});
+
+test('normaliza/valida as camadas salvas', () => {
+  assert.equal(normalizarCamadasSalvas(null), null);
+  assert.equal(normalizarCamadasSalvas('lixo'), null);
+
+  const salvo = normalizarCamadasSalvas({
+    severidades: ['Perigo', 'Invalida', 'Grande Perigo'],
+    basemap: ' satelite ',
+    clima: 'radar',
+  });
+  assert.deepEqual(salvo.severidades, ['Perigo', 'Grande Perigo']);
+  assert.equal(salvo.basemap, 'satelite');
+  assert.equal(salvo.clima, 'radar');
+
+  const vazio = normalizarCamadasSalvas({ clima: 'invalido' });
+  assert.equal(vazio.clima, null);
+  assert.equal(vazio.basemap, null);
+  assert.equal(vazio.severidades, null);
+});
+
+test('grava e lê as camadas do storage', () => {
+  const storage = criarStorageFake();
+  const chave = 'teste';
+
+  assert.equal(
+    salvarCamadas(storage, chave, {
+      severidades: ['Perigo'],
+      basemap: 'topografico',
+      clima: 'nuvens',
+    }),
+    true,
+  );
+  const lido = lerCamadas(storage, chave);
+  assert.deepEqual(lido, {
+    severidades: ['Perigo'],
+    basemap: 'topografico',
+    clima: 'nuvens',
+  });
+
+  // Storage ausente ou JSON corrompido não quebra
+  assert.equal(salvarCamadas(null, chave, {}), false);
+  assert.equal(lerCamadas(null, chave), null);
+  storage.setItem(chave, '{quebrado');
+  assert.equal(lerCamadas(storage, chave), null);
+});
+
+test('deve fechar o controle quando o clique é fora', () => {
+  const controle = { id: 'controle' };
+  assert.equal(deveFecharControle([controle, 'mapa'], controle), false);
+  assert.equal(deveFecharControle(['mapa', 'card'], controle), true);
+  assert.equal(deveFecharControle([], controle), false);
+  assert.equal(deveFecharControle(['mapa'], null), false);
+});
+
+test('plugin restaura as camadas salvas no construtor', () => {
+  const storage = criarStorageFake({
+    [chavePersistenciaCamadas('inmet', ['rio_de_janeiro'])]: JSON.stringify({
+      severidades: ['Perigo'],
+      basemap: 'satelite',
+      clima: 'radar',
+    }),
+  });
+
+  const { plugin } = criarInstancia({ storage });
+  assert.equal(plugin.layerVisibility['Perigo'], true);
+  assert.equal(plugin.layerVisibility['Grande Perigo'], false);
+  assert.equal(plugin.layerVisibility['Perigo Potencial'], false);
+  assert.equal(plugin._basemapAtual, 'satelite');
+  assert.equal(plugin._climaAtual, 'radar');
+
+  plugin.destroy();
+});
+
+test('plugin grava as escolhas do controle (e respeita persistirCamadas: false)', () => {
+  const storage = criarStorageFake();
+  const chave = chavePersistenciaCamadas('inmet', ['rio_de_janeiro']);
+
+  const { plugin } = criarInstancia({ storage });
+  plugin.setSeveridades(['Grande Perigo']);
+  assert.deepEqual(JSON.parse(storage.dados[chave]).severidades, [
+    'Grande Perigo',
+  ]);
+  plugin.destroy();
+
+  const novoStorage = criarStorageFake();
+  const desativado = criarInstancia({
+    storage: novoStorage,
+    persistirCamadas: false,
+  });
+  desativado.plugin.setSeveridades(['Perigo']);
+  assert.equal(novoStorage.dados[chave], undefined);
+  desativado.plugin.destroy();
 });
